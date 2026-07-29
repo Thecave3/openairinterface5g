@@ -26,8 +26,15 @@
 #ifdef E3_SM_HAVE_JSON
 #include <json-c/json.h>
 #endif
+#ifdef E3_SM_HAVE_PROTOBUF
+#include "e3sm_l1_kpm.pb-c.h"
+#endif
 
 #define L1_KPM_SHM_NAME_LEN (sizeof(E3_RB_SHM_NAME) - 1u)
+
+#ifdef E3_SM_HAVE_PROTOBUF
+static int l1_kpm_enc_indication_protobuf(const e3_ran_buffers_slot_info_t *slot, uint8_t *out_buf, size_t out_buf_size);
+#endif
 
 int l1_kpm_enc_indication(const e3_ran_buffers_slot_info_t *slot, uint8_t *out_buf, size_t out_buf_size)
 {
@@ -68,6 +75,13 @@ int l1_kpm_enc_indication(const e3_ran_buffers_slot_info_t *slot, uint8_t *out_b
       return -1;
     }
     return (int)bytes;
+  } else if (e3_get_encoding() == E3_ENCODING_PROTOBUF) {
+#ifdef E3_SM_HAVE_PROTOBUF
+    return l1_kpm_enc_indication_protobuf(slot, out_buf, out_buf_size);
+#else
+    KPM_LOG_E("protobuf encoding not compiled in\n");
+    return -1;
+#endif
   } else {
 #ifdef E3_SM_HAVE_JSON
     /* ATTRIBUTION: this JSON payload follows NVIDIA Aerial's public E3 message
@@ -110,6 +124,42 @@ int l1_kpm_enc_indication(const e3_ran_buffers_slot_info_t *slot, uint8_t *out_b
 #endif
   }
 }
+
+#ifdef E3_SM_HAVE_PROTOBUF
+static int l1_kpm_enc_indication_protobuf(const e3_ran_buffers_slot_info_t *slot, uint8_t *out_buf, size_t out_buf_size)
+{
+  E3sm__L1kpm__V1__L1KPMShmRef shm = E3SM__L1KPM__V1__L1_KPMSHM_REF__INIT;
+  shm.has_shm_name = 1;
+  shm.shm_name.data = (uint8_t *)E3_RB_SHM_NAME;
+  shm.shm_name.len = L1_KPM_SHM_NAME_LEN;
+  shm.has_fh_buffer_index = 1;
+  shm.fh_buffer_index = slot->fh_buffer_index;
+  shm.has_fh_write_index = 1;
+  shm.fh_write_index = slot->fh_write_index;
+
+  E3sm__L1kpm__V1__L1KPMIndication pdu = E3SM__L1KPM__V1__L1_KPMINDICATION__INIT;
+  pdu.iq_samples_ref = &shm;
+  pdu.has_timestamp = 1;
+  pdu.timestamp = (int64_t)slot->timestamp_ns;
+  pdu.has_sfn = 1;
+  pdu.sfn = slot->sfn;
+  pdu.has_slot = 1;
+  pdu.slot = slot->slot;
+  pdu.has_cell_id = 1;
+  pdu.cell_id = slot->cell_id;
+  pdu.has_n_rx_ant = 1;
+  pdu.n_rx_ant = slot->n_rx_ant;
+  pdu.has_valid_symbol_mask = 1;
+  pdu.valid_symbol_mask = slot->valid_symbol_mask;
+
+  size_t sz = e3sm__l1kpm__v1__l1_kpmindication__get_packed_size(&pdu);
+  if (sz > out_buf_size) {
+    return -1;
+  }
+  e3sm__l1kpm__v1__l1_kpmindication__pack(&pdu, out_buf);
+  return (int)sz;
+}
+#endif
 
 int l1_kpm_enc_ran_function_data(const char *name,
                                  int version,

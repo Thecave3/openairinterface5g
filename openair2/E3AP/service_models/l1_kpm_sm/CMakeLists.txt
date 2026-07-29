@@ -60,6 +60,12 @@ else()
 endif()
 
 
+if(L1_KPM_SM_HAVE_PROTOBUF)
+  target_include_directories(l1_kpm_sm PUBLIC ${CMAKE_CURRENT_BINARY_DIR}/MESSAGES ${PROTOBUFC_INCLUDE_DIRS})
+  target_link_libraries(l1_kpm_sm l1_kpm_sm_pb)
+  target_compile_definitions(l1_kpm_sm PRIVATE E3_SM_HAVE_PROTOBUF)
+endif()
+
 if(ENABLE_TESTS)
   add_subdirectory(tests)
 endif()
