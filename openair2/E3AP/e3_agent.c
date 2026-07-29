@@ -3,6 +3,7 @@
  */
 
 #include "e3_agent.h"
+#include "e3_log.h"
 #include "config/e3_config.h"
 
 // TODO replace pthreads with itti or use a faster way
@@ -21,12 +22,17 @@
 
 e3_agent_global_t e3 = {0};
 
+int e3_get_encoding(void)
+{
+  return e3.encoding;
+}
+
 static void e2_e3_bridge(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *report_data, size_t report_size)
 {
-  LOG_D(E3AP, "Received dApp report for RAN function %u from dApp %u (%zu bytes)\n", ran_function_id, dapp_id, report_size);
+  E3_LOG_D("Received dApp report for RAN function %u from dApp %u (%zu bytes)\n", ran_function_id, dapp_id, report_size);
 #ifdef E2_AGENT
   if (!report_data && report_size > 0) {
-    LOG_E(E3AP, "Invalid dApp report payload: report_data is NULL while report_size=%zu\n", report_size);
+    E3_LOG_E("Invalid dApp report payload: report_data is NULL while report_size=%zu\n", report_size);
     return;
   }
   generate_e2_indication_from_e3_dapp_report(ran_function_id, dapp_id, report_size, report_data);
@@ -37,7 +43,7 @@ static void e2_e3_bridge(uint32_t dapp_id, uint32_t ran_function_id, const uint8
 
 void on_dapp_status_changed(void)
 {
-  LOG_I(E3AP, "dApp status changed, triggering RIC Service Update\n");
+  E3_LOG_I("dApp status changed, triggering RIC Service Update\n");
 #ifdef E2_AGENT
   notify_dapp_status_changed();
 #endif
@@ -45,10 +51,10 @@ void on_dapp_status_changed(void)
 
 int e3_init()
 {
-  LOG_D(E3AP, "Read configuration\n");
+  E3_LOG_D("Read configuration\n");
   e3_cmdline_config_t *e3_cmdline_configs = (e3_cmdline_config_t *)calloc(1, sizeof(e3_cmdline_config_t));
   if (!e3_cmdline_configs) {
-    LOG_E(E3AP, "Failed to allocate E3 cmdline config\n");
+    E3_LOG_E("Failed to allocate E3 cmdline config\n");
     return -1;
   }
   e3_readconfig(e3_cmdline_configs);
@@ -67,28 +73,20 @@ int e3_init()
   config.setup_port = e3_cmdline_configs->setup_port;
   config.subscriber_port = e3_cmdline_configs->subscriber_port;
   config.publisher_port = e3_cmdline_configs->publisher_port;
+  e3.encoding = e3_cmdline_configs->encoding;
 
   e3.agent = e3_agent_create_with_config(&config);
   free(e3_cmdline_configs);
   e3_cmdline_configs = NULL;
   if (!e3.agent) {
-    LOG_E(E3AP, "Failed to create E3Agent with config\n");
+    E3_LOG_E("Failed to create E3Agent with config\n");
     return -1;
   }
 
   // Initialize agent
   e3_error_t err = e3_agent_init(e3.agent);
   if (err != 0) {
-    LOG_E(E3AP, "Failed to initialize E3Agent (err=%d)\n", err);
-    e3_agent_destroy(e3.agent);
-    e3.agent = NULL;
-    return -1;
-  }
-
-  // Start agent
-  err = e3_agent_start(e3.agent);
-  if (err != 0) {
-    LOG_E(E3AP, "Failed to start E3Agent (err=%d)\n", err);
+    E3_LOG_E("Failed to initialize E3Agent (err=%d)\n", err);
     e3_agent_destroy(e3.agent);
     e3.agent = NULL;
     return -1;
@@ -96,7 +94,7 @@ int e3_init()
 
   err = e3_agent_set_dapp_report_handler(e3.agent, e2_e3_bridge);
   if (err != 0) {
-    LOG_E(E3AP, "Failed to set dApp report handler (err=%d: %s)\n", err, e3_error_to_string(err));
+    E3_LOG_E("Failed to set dApp report handler (err=%d: %s)\n", err, e3_error_to_string(err));
     e3_agent_destroy(e3.agent);
     e3.agent = NULL;
     return -1;
@@ -104,14 +102,26 @@ int e3_init()
 
   err = e3_agent_set_dapp_status_changed_handler(e3.agent, on_dapp_status_changed);
   if (err != 0) {
-    LOG_E(E3AP, "Failed to set dApp status changed handler (err=%d: %s)\n", err, e3_error_to_string(err));
+    E3_LOG_E("Failed to set dApp status changed handler (err=%d: %s)\n", err, e3_error_to_string(err));
     e3_agent_destroy(e3.agent);
     e3.agent = NULL;
     return -1;
   }
 
-  // No concrete service models are registered by the framework itself; service
-  // models (e.g. spectrum sensing) register themselves in their own modules.
+  /* Start LAST, once every handler (and, from here on, every service model) is
+   * in place: libe3's contract is register-before-start. start() spawns the
+   * setup thread immediately, and a dApp connecting before registration would
+   * get an empty ranFunctionList (late registrations are accepted but never
+   * re-advertised); the report and status handlers are plain function members
+   * read by the running threads, so installing them post-start is a race. */
+  err = e3_agent_start(e3.agent);
+  if (err != 0) {
+    E3_LOG_E("Failed to start E3Agent (err=%d)\n", err);
+    e3_agent_destroy(e3.agent);
+    e3.agent = NULL;
+    return -1;
+  }
+
   return 0;
 }
 
@@ -130,18 +140,18 @@ int e3_destroy()
 int e3_send_xapp_control(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *data, size_t len)
 {
   if (!e3.agent) {
-    LOG_E(E3AP, "E3 agent not initialized: cannot send xApp control\n");
+    E3_LOG_E("E3 agent not initialized: cannot send xApp control\n");
     return -1;
   }
 
   if (data == NULL && len > 0) {
-    LOG_E(E3AP, "data is not initialized, but len > 0\n");
+    E3_LOG_E("data is not initialized, but len > 0\n");
     return -1;
   }
 
   e3_error_t err = e3_agent_send_xapp_control(e3.agent, dapp_id, ran_function_id, data, len);
   if (err != E3_SUCCESS) {
-    LOG_E(E3AP, "Failed to send xApp control to dApp %u for RAN function %u (err=%d)\n", dapp_id, ran_function_id, err);
+    E3_LOG_E("Failed to send xApp control to dApp %u for RAN function %u (err=%d)\n", dapp_id, ran_function_id, err);
     return -1;
   }
   return 0;
@@ -152,7 +162,7 @@ e3_dapp_subscription_map_t e3_get_dapp_subscription_map(void)
   e3_dapp_subscription_map_t map = {0};
 
   if (!e3.agent) {
-    LOG_W(E3AP, "E3 agent not initialized: cannot query dApp subscriptions\n");
+    E3_LOG_W("E3 agent not initialized: cannot query dApp subscriptions\n");
     return map;
   }
 
@@ -165,7 +175,7 @@ e3_dapp_subscription_map_t e3_get_dapp_subscription_map(void)
 
   map.dapps = calloc(num_dapps, sizeof(e3_dapp_info_t));
   if (!map.dapps) {
-    LOG_E(E3AP, "Failed to allocate dApp subscription map\n");
+    E3_LOG_E("Failed to allocate dApp subscription map\n");
     e3_agent_free_uint32_array(dapp_ids);
     return map;
   }

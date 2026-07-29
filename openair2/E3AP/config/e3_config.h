@@ -24,9 +24,11 @@ typedef struct {
   int link_layer; /* E3_LINK_{ZMQ,POSIX}; -1 = libe3 default */
   int transport_layer; /* E3_TRANSPORT_{SCTP,TCP,IPC}; -1 = libe3 default */
   int encoding; /* E3_ENCODING_{ASN1,JSON}; -1 = libe3 default */
-  uint16_t setup_port; /* 0 = libe3 default (9990) */
-  uint16_t subscriber_port; /* 0 = libe3 default */
-  uint16_t publisher_port; /* 0 = libe3 default */
+  uint16_t setup_port; /* dApp setup REP port; 0 = libe3 default (9990) */
+  uint16_t subscriber_port; /* dApp command SUB port; 0 = libe3 default */
+  uint16_t publisher_port; /* dApp indication PUB port; 0 = libe3 default */
+  int32_t *enabled_sms; /* SM IDs to enable (NULL/empty = enable all) */
+  int num_enabled_sms; /* number of entries in enabled_sms */
 } e3_cmdline_config_t;
 
 /**
