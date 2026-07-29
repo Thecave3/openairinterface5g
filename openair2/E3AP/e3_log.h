@@ -32,4 +32,16 @@
 #define E3_LOG_I(x, args...) LOG_I(E3AP, "[AGENT] " x, ##args)
 #define E3_LOG_D(x, args...) LOG_D(E3AP, "[AGENT] " x, ##args)
 
+/* L1-KPM service model */
+#define KPM_LOG_E(x, args...) LOG_E(E3AP, "[KPM-SM] " x, ##args)
+#define KPM_LOG_W(x, args...) LOG_W(E3AP, "[KPM-SM] " x, ##args)
+#define KPM_LOG_I(x, args...) LOG_I(E3AP, "[KPM-SM] " x, ##args)
+#define KPM_LOG_D(x, args...) LOG_D(E3AP, "[KPM-SM] " x, ##args)
+
+/* L1-KPM post-FFT IQ shared-memory producer */
+#define E3RB_LOG_E(x, args...) LOG_E(E3AP, "[E3RB] " x, ##args)
+#define E3RB_LOG_W(x, args...) LOG_W(E3AP, "[E3RB] " x, ##args)
+#define E3RB_LOG_I(x, args...) LOG_I(E3AP, "[E3RB] " x, ##args)
+#define E3RB_LOG_D(x, args...) LOG_D(E3AP, "[E3RB] " x, ##args)
+
 #endif /* E3_LOG_H */

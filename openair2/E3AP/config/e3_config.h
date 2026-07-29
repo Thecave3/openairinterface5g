@@ -7,6 +7,9 @@
 
 #include <stdint.h>
 
+/* SM identifiers, used by enabled_sms */
+#define E3_SM_ID_KPM 2 /* L1-KPM SM: PHY IQ metadata */
+
 /* link_layer values (match libe3 e3_config_t; -1 = libe3 default) */
 #define E3_LINK_ZMQ 0
 #define E3_LINK_POSIX 1
