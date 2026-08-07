@@ -5,6 +5,7 @@
 #include "e3_agent.h"
 #include "e3_log.h"
 #include "config/e3_config.h"
+#include "service_models/spectrum_sm/spectrum_sm.h"
 #include "service_models/l1_kpm_sm/l1_kpm_sm.h"
 
 // TODO replace pthreads with itti or use a faster way
@@ -33,6 +34,7 @@ typedef struct {
 } e3_sm_registration_t;
 
 static const e3_sm_registration_t e3_service_models[] = {
+    {E3_SM_ID_SPECTRUM, "Spectrum", create_spectrum_sm_model, spectrum_sm_set_handle, spectrum_telemetry_set_period_us},
     {E3_SM_ID_KPM, "L1-KPM", create_l1_kpm_sm_model, l1_kpm_sm_set_handle, l1_kpm_sm_set_period_us},
 };
 
@@ -41,6 +43,20 @@ e3_agent_global_t e3 = {0};
 int e3_get_encoding(void)
 {
   return e3.encoding;
+}
+
+static void e2_e3_bridge(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *report_data, size_t report_size)
+{
+  E3_LOG_D("Received dApp report for RAN function %u from dApp %u (%zu bytes)\n", ran_function_id, dapp_id, report_size);
+#ifdef E2_AGENT
+  if (!report_data && report_size > 0) {
+    E3_LOG_E("Invalid dApp report payload: report_data is NULL while report_size=%zu\n", report_size);
+    return;
+  }
+  generate_e2_indication_from_e3_dapp_report(ran_function_id, dapp_id, report_size, report_data);
+#else
+  (void)report_data;
+#endif
 }
 
 /* Emit cadence for one RAN function: the fastest periodicity any subscribed
@@ -62,20 +78,6 @@ static uint32_t min_subscription_period_us(uint32_t ran_function_id)
   }
   e3_agent_free_uint32_array(dapps);
   return min_us;
-}
-
-static void e2_e3_bridge(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *report_data, size_t report_size)
-{
-  E3_LOG_D("Received dApp report for RAN function %u from dApp %u (%zu bytes)\n", ran_function_id, dapp_id, report_size);
-#ifdef E2_AGENT
-  if (!report_data && report_size > 0) {
-    E3_LOG_E("Invalid dApp report payload: report_data is NULL while report_size=%zu\n", report_size);
-    return;
-  }
-  generate_e2_indication_from_e3_dapp_report(ran_function_id, dapp_id, report_size, report_data);
-#else
-  (void)report_data;
-#endif
 }
 
 void on_dapp_status_changed(void)
@@ -198,12 +200,12 @@ int e3_init()
     }
   }
 
-  /* Start LAST, once every handler (and, from here on, every service model) is
-   * in place: libe3's contract is register-before-start. start() spawns the
-   * setup thread immediately, and a dApp connecting before registration would
-   * get an empty ranFunctionList (late registrations are accepted but never
-   * re-advertised); the report and status handlers are plain function members
-   * read by the running threads, so installing them post-start is a race. */
+  /* Start LAST, once every SM and handler is in place: libe3's contract is
+   * register-before-start. start() spawns the setup thread immediately, and a
+   * dApp connecting before registration would get an empty ranFunctionList
+   * (late registrations are accepted but never re-advertised); the report and
+   * status handlers are plain function members read by the running threads,
+   * so installing them post-start is a data race. */
   err = e3_agent_start(e3.agent);
   if (err != 0) {
     E3_LOG_E("Failed to start E3Agent (err=%d)\n", err);
