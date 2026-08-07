@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <sched.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,8 @@
 #include "system.h"
 #include "time_meas.h"
 #include "utils.h"
+#include "gNB_scheduler_ul_sensing.h"
+#include "gNB_scheduler_prb_block.h"
 
 #define MACSTATSSTRLEN 36256
 
@@ -307,6 +310,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
       RC.nrmac[i]->ul_tda_select = nr_ul_tda_select_default;
       RC.nrmac[i]->ul_beam_select = nr_ul_beam_select_default;
       RC.nrmac[i]->ul_mcs_select = nr_ul_mcs_select_default;
+
       RC.nrmac[i]->ul_rb_alloc = nr_ul_proportional_fair;
 
       RC.nrmac[i]->dl_lcid_alloc = nr_dl_lcid_alloc_default;
@@ -361,6 +365,10 @@ void mac_top_destroy_gNB(gNB_MAC_INST *mac)
     ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, cc->mib);
     ASN_STRUCT_FREE(asn_DEF_NR_BCCH_DL_SCH_Message, cc->sib1);
     ASN_STRUCT_FREE(asn_DEF_NR_ServingCellConfigCommon, cc->ServingCellConfigCommon);
+#ifdef E3_AGENT
+    /* Symmetric with the allocation in nr_mac_config_scc(). */
+    prb_block_free(cell);
+#endif /* E3_AGENT */
   }
   NR_UEs_t *UE_info = &mac->UE_info;
   for (int i = 0; i < sizeofArray(UE_info->connected_ue_list); ++i)
