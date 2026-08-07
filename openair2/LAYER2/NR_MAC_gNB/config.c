@@ -35,6 +35,9 @@
 #include "nfapi_nr_interface.h"
 #include "nfapi_nr_interface_scf.h"
 #include "utils.h"
+#ifdef E3_AGENT
+#include "NR_MAC_gNB/gNB_scheduler_prb_block.h"
+#endif /* E3_AGENT */
 
 c16_t convert_precoder_weight(double complex c_in)
 {
@@ -994,6 +997,11 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, nr_cell_sched_t *cell, NR_ServingCel
   cell->sensing_enabled = config->num_sensing_target_slots > 0;
   if (cell->sensing_enabled)
     LOG_I(NR_MAC, "Sensing mode enabled: %d hard-reserved slots\n", config->num_sensing_target_slots);
+
+  /* Per-cell PRB-block state for the dApp control plane; inactive until a
+   * control installs a mask. Allocated here, with the other per-cell scheduler
+   * resources, and released in the per-cell loop of mac_top_destroy_gNB(). */
+  prb_block_init(cell);
 #endif /* E3_AGENT */
   seq_arr_init(&nrmac->pos_act_ue_arr, sizeof(positioning_activation_info_t));
 }
