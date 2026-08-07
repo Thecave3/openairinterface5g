@@ -119,7 +119,7 @@ run_encoding() {
     local rc=0
     timeout $((DAPP_TIMED + 30)) \
         python3 -m examples.spectrum_dapp \
-        --link zmq --transport tcp --encoding-method "${enc}" --timed "${DAPP_TIMED}" \
+        --link zmq --transport tcp --encoding-method "${enc}" --timed "${DAPP_TIMED}" --control \
         > "${dapp_log}" 2>&1 || rc=$?
     cp -f /tmp/dapp.log "${applog}"            2>/dev/null
     cp -f /tmp/e3.log   "${WORK}/e3_${enc}.log" 2>/dev/null
@@ -147,6 +147,7 @@ run_encoding() {
         "\[KPM-SM\] started (first subscription)" \
         "\[SPECTRUM-SM\] first indication batch" \
         "\[KPM-SM\] first indication batch" \
+        "\[SPECTRUM\] prbBlock:" \
         "\[SPECTRUM-SM\] stopped (last subscription gone)" \
         "\[KPM-SM\] stopped (last subscription gone)"
     do
@@ -157,6 +158,9 @@ run_encoding() {
     case "${enc}" in asn1) encname="ASN.1";; json) encname="JSON";; protobuf) encname="Protocol Buffers";; *) encname="${enc}";; esac
     grep -q "Encoding RAN function data with ${encname} encoder" "${gnb_log}" \
         || fail "${enc}: gNB did not select the ${encname} encoder"
+    if grep -qE "prbBlock: .*-> ok=0|sensingPolicy: .*-> ok=0" "${gnb_log}"; then
+        fail "${enc}: gNB refused a control"; grep -E "ok=0" "${gnb_log}" | head -3 >&2
+    fi
     if grep -q "Assertion" "${gnb_log}"; then
         fail "${enc}: assertion failure in the gNB log"; grep "Assertion" "${gnb_log}" | head -3 >&2
     fi
