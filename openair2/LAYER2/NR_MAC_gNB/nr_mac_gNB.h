@@ -189,6 +189,13 @@ typedef enum nr_srs_type_e {
   APERIODIC_SRS,
 } nr_srs_type_t;
 
+#define MAX_ADDITIONAL_UL_TDAS 16
+
+typedef struct additional_ul_tda {
+  int start_symbol;
+  int num_symbols;
+} additional_ul_tda_t;
+
 /* Max configurable sensing-PUSCH beams. Bounded by the FAPI beamforming fanout
  * NFAPI_MAX_NUM_BG_IF (=6); a _Static_assert in the .c enforces it. */
 #define SENSING_MAX_BEAMS 6
@@ -227,6 +234,8 @@ typedef struct nr_mac_config_s {
   nr_beam_table_t bt;
   /// Spatial stream indexing for mapping onto RU ports. Needed for MU-MIMO
   uint16_t spatial_stream_index[MAX_NUM_SPATIAL_STREAMS];
+  int num_additional_ul_tdas;
+  additional_ul_tda_t additional_ul_tdas[MAX_ADDITIONAL_UL_TDAS];
   /* Slots (index mod TDD period) hard-reserved for sensing: the scheduler blocks
    * every UE allocator from them, then frees them just before the scan so a full
    * clean PRB range is emitted. */

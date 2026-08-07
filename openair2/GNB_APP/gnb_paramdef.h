@@ -101,10 +101,14 @@ typedef enum {
 #define GNB_CONFIG_STRING_CONFIG_REP                    "CSI_report_type"
 #define GNB_CONFIG_STRING_1ST_ACTIVE_BWP                "first_active_bwp"
 #define GNB_CONFIG_STRING_LIMIT_RSRP_REPORT             "max_num_RSRP_reported"
-/* SPEAR sensing / TDA parameters: only defined with the E3 agent. The rows sit
+/* Sensing / TDA parameters: only defined with the E3 agent. The rows sit
  * at the tail of GNBPARAMS_DESC / GNBPARAMS_CHECK so the indices of the common
  * parameters above do not depend on E3_AGENT. */
 #ifdef E3_AGENT
+#define GNB_CONFIG_STRING_ADDITIONAL_UL_TDAS "additional_ul_tdas"
+#define GNB_CONFIG_HLP_ADDITIONAL_UL_TDAS                                                                                         \
+  "Extra UL TDA entries as start:length pairs, e.g. \"0:6,0:4\" -- the scheduler only picks them when a dApp installs a sensing " \
+  "policy via spectrum_sm ctrl_id=2"
 #define GNB_CONFIG_STRING_SENSING_TARGET_SLOTS "sensing_target_slots"
 #define GNB_CONFIG_HLP_SENSING_TARGET_SLOTS                                                                                   \
   "Hard-reserve listed slots (modulo TDD period) for sensing; UE gets no UL grant on these slots, dApp sees a full sym 0-13 " \
@@ -127,6 +131,7 @@ typedef enum {
   "index 0"
 // clang-format off
 #define GNB_SENSING_PARAMS_DESC \
+{GNB_CONFIG_STRING_ADDITIONAL_UL_TDAS, GNB_CONFIG_HLP_ADDITIONAL_UL_TDAS, 0, .strptr=NULL, .defstrval="", TYPE_STRING, 0},  \
 {GNB_CONFIG_STRING_SENSING_TARGET_SLOTS, GNB_CONFIG_HLP_SENSING_TARGET_SLOTS, 0, .iptr=NULL, .defintarrayval=NULL, TYPE_INTARRAY, 0},  \
 {GNB_CONFIG_STRING_SENSING_PUSCH_MCS, GNB_CONFIG_HLP_SENSING_PUSCH_MCS, 0, .iptr=NULL, .defintval=9, TYPE_INT, 0},  \
 {GNB_CONFIG_STRING_SENSING_PUSCH_RB_SIZE, GNB_CONFIG_HLP_SENSING_PUSCH_RB_SIZE, 0, .iptr=NULL, .defintval=1, TYPE_INT, 0},  \
@@ -134,6 +139,7 @@ typedef enum {
 {GNB_CONFIG_STRING_SENSING_PUSCH_NL, GNB_CONFIG_HLP_SENSING_PUSCH_NL, 0, .iptr=NULL, .defintval=1, TYPE_INT, 0},  \
 {GNB_CONFIG_STRING_SENSING_PUSCH_BEAMS, GNB_CONFIG_HLP_SENSING_PUSCH_BEAMS, 0, .iptr=NULL, .defintarrayval=NULL, TYPE_INTARRAY, 0},
 #define GNB_SENSING_PARAMS_CHECK \
+  { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
   { .s5 = { NULL } },                                             \
@@ -253,12 +259,13 @@ GNB_SENSING_PARAMS_DESC \
 #define GNB_1ST_ACTIVE_BWP_IDX          38
 #define GNB_LIMIT_RSRP_REPORT_IDX       39
 #ifdef E3_AGENT
-#define GNB_SENSING_TARGET_SLOTS_IDX 40
-#define GNB_SENSING_PUSCH_MCS_IDX 41
-#define GNB_SENSING_PUSCH_RB_SIZE_IDX 42
-#define GNB_SENSING_PUSCH_RB_START_IDX 43
-#define GNB_SENSING_PUSCH_NL_IDX 44
-#define GNB_SENSING_PUSCH_BEAMS_IDX 45
+#define GNB_ADDITIONAL_UL_TDAS_IDX 40
+#define GNB_SENSING_TARGET_SLOTS_IDX 41
+#define GNB_SENSING_PUSCH_MCS_IDX 42
+#define GNB_SENSING_PUSCH_RB_SIZE_IDX 43
+#define GNB_SENSING_PUSCH_RB_START_IDX 44
+#define GNB_SENSING_PUSCH_NL_IDX 45
+#define GNB_SENSING_PUSCH_BEAMS_IDX 46
 #endif
 
 #define TRACKING_AREA_CODE_OKRANGE {0x0001,0xFFFD}
