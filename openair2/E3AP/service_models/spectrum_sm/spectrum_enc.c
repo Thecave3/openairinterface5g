@@ -3,6 +3,7 @@
  */
 
 #include "spectrum_enc.h"
+#include "../../e3_log.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -155,7 +156,7 @@ int spectrum_encode_ran_function_data(uint8_t **encoded_data, size_t *encoded_si
 #ifdef E3_SM_HAVE_PROTOBUF
     return spectrum_encode_ran_function_data_protobuf(encoded_data, encoded_size);
 #else
-    LOG_E(E3AP, "[SPECTRUM] protobuf encoding not compiled in\n");
+    SPEC_LOG_E("protobuf encoding not compiled in\n");
     return E3_SM_ERROR_INVALID_PARAM;
 #endif
   }
@@ -234,7 +235,7 @@ int spectrum_encode_indication(const nr_mac_sensing_publish_meta_t *meta,
     e3sm__spectrum__v1__spectrum_sensing_indication__pack(&pdu, out_buf);
     return (int)sz;
 #else
-    LOG_E(E3AP, "[SPECTRUM] protobuf encoding not compiled in\n");
+    SPEC_LOG_E("protobuf encoding not compiled in\n");
     return -1;
 #endif
   } else {

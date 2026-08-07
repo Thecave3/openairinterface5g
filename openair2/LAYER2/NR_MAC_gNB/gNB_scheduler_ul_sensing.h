@@ -30,6 +30,10 @@ typedef struct {
 
 #ifdef E3_AGENT
 
+/* The cell the E3 service models act on (cell 0 today). NULL before MAC init.
+ * Weak no-op stub in nr_mac_sensing_stub.c so nr-cuup links without the MAC. */
+nr_cell_sched_t *nr_mac_e3_default_cell(void);
+
 /* Allocate / release this cell's sensing-policy state, which backs
  * cell->sched_stateful_data. Called from nr_mac_config_scc() and the per-cell
  * teardown loop in mac_top_destroy_gNB(). */

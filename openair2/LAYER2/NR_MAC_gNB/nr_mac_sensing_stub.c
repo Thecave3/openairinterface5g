@@ -19,6 +19,7 @@
 #include "gNB_scheduler_ul_sensing_types.h"
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 __attribute__((weak)) bool nr_mac_get_sensing_ranges(int mod_id,
@@ -58,11 +59,17 @@ __attribute__((weak)) void nr_mac_signal_sensing_shutdown(void)
 }
 
 /* Strong defs in gNB_scheduler_ul_sensing.c / gNB_scheduler_prb_block.c. No MAC
- * in a CU-UP, so these are no-ops and the SM's control dispatchers NACK back to
- * the dApp. Keep the signatures byte-identical to the strong defs -- the linker
- * does not check them, so a mismatch would silently pass wrong arguments. */
+ * in a CU-UP, so these are no-ops: the accessor hands back NULL and the SM's
+ * dispatchers NACK back to the dApp before ever calling the setters. Keep the
+ * signatures byte-identical to the strong defs -- the linker does not check
+ * them, so a mismatch would silently pass wrong arguments. */
 struct gNB_MAC_INST_s;
 struct nr_cell_sched_s;
+
+__attribute__((weak)) struct nr_cell_sched_s *nr_mac_e3_default_cell(void)
+{
+  return NULL;
+}
 
 __attribute__((weak)) bool set_sensing_policy(struct nr_cell_sched_s *cell, const uint16_t *mask, int n_slots)
 {
