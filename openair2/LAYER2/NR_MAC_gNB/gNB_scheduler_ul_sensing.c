@@ -444,6 +444,17 @@ int nr_ul_tda_select_sensing(gNB_MAC_INST *mac,
  * mask==NULL / n_slots==0 deactivates; otherwise n_slots MUST equal the cell's
  * slots-per-frame (TDD mismatch is rejected). Sets sp->active, which gates the
  * mask-aware UL TDA selector. */
+/* The cell the E3 service models act on. Multi-cell dApp addressing is not
+ * specified yet, so the SMs target cell 0 -- matching the beam-0 assumption in
+ * the sensing publish path. NULL before MAC init. Exists so the service models
+ * can reach a cell without pulling in the MAC header surface. */
+nr_cell_sched_t *nr_mac_e3_default_cell(void)
+{
+  if (!RC.nrmac || !RC.nrmac[0])
+    return NULL;
+  return &RC.nrmac[0]->cells[0];
+}
+
 /* Allocate the sensing-policy state behind cell->sched_stateful_data. Starts
  * inactive: the selector then behaves like the default one until a dApp calls
  * set_sensing_policy(). */

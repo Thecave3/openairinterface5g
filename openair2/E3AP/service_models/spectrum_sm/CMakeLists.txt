@@ -10,6 +10,7 @@ add_subdirectory(MESSAGES)
 set(SPECTRUM_SM_SOURCES
     spectrum_sm.c
     spectrum_enc.c
+    spectrum_dec.c
     spectrum_sensing_ring.c
     ${CMAKE_SOURCE_DIR}/openair2/LAYER2/NR_MAC_gNB/nr_mac_sensing_stub.c
 )
