@@ -17,7 +17,42 @@ static inline bool nr_slot_is_ul_or_mixed(const frame_structure_t *fs, slot_t sl
   return is_ul_slot(slot, fs) || is_mixed_slot(slot, fs);
 }
 
+/* --- Sensing policy state (dApp control) -------------------------------- */
+/* Per-frame mask: for each slot index in the frame, a 14-bit bitmap of
+ * symbols the dApp wants freed for sensing. Read by the TDA selector,
+ * written by set_sensing_policy(). */
+typedef struct {
+  pthread_mutex_t lock;
+  bool active; /* false = no mask, behave like default */
+  uint16_t mask[MAX_NUM_SLOTS_ALLOWED]; /* per-slot symbol bitmap */
+  int n_slots; /* slots-per-frame the mask was set for */
+} sensing_policy_state_t;
+
 #ifdef E3_AGENT
+
+/* Allocate / release this cell's sensing-policy state, which backs
+ * cell->sched_stateful_data. Called from nr_mac_config_scc() and the per-cell
+ * teardown loop in mac_top_destroy_gNB(). */
+void sensing_policy_init(nr_cell_sched_t *cell);
+void sensing_policy_free(nr_cell_sched_t *cell);
+
+/* Replace the current sensing mask. Set active=false (n_slots=0) to clear.
+ * n_slots must match cell->frame_structure.numb_slots_frame, otherwise the
+ * call is rejected (caller-side TDD mismatch). Returns true on success. */
+bool set_sensing_policy(nr_cell_sched_t *cell, const uint16_t *mask, int n_slots);
+
+/* --- TDA selector ---------------------------------------------- *
+ * Mask-aware UL TDA selector (installed as ul_tda_select when sensing is on):
+ * picks each candidate's TDA against the per-slot sensing mask so symbols stay
+ * free for sensing; with no active policy it behaves like the default selector.
+ * Returns the number of candidates given a valid TDA. */
+int nr_ul_tda_select_sensing(gNB_MAC_INST *mac,
+                             nr_cell_sched_t *cell,
+                             nr_ul_candidate_t *cands,
+                             int n_cand,
+                             frame_t sched_frame,
+                             slot_t sched_slot,
+                             int k2);
 
 /* Per-slot sensing glue, called unconditionally from gNB_dlsch_ulsch_scheduler().
  * reserve/restore bracket the UE allocators (block the slot, then free it for the
