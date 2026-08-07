@@ -10,6 +10,7 @@
 
 #include "gNB_scheduler_ul_sensing.h"
 #include "LAYER2/NR_MAC_gNB/mac_proto.h"
+#include "LAYER2/NR_MAC_gNB/gNB_scheduler_prb_block.h"
 #include "LAYER2/NR_MAC_COMMON/nr_mac_common.h"
 #include "common/utils/nr/nr_common.h"
 
@@ -69,8 +70,10 @@ void nr_mac_sensing_restore_ul_slot(nr_cell_sched_t *cell, frame_t frame, slot_t
   const int num_beams = nr_mac_active_beams(cell);
   for (int b = 0; b < num_beams; b++) {
     uint16_t *row = &cell->common_channels.vrb_map_UL[b][buf_idx * MAX_BWP_SIZE];
-    /* Reset to the static block list so the reserved slot is clean for sensing. */
+    /* Reset to the static block list, then re-apply the live dApp UL block so
+     * reserved-slot sensing keeps the block intent. */
     memcpy(row, &cell->ulprbbl, sizeof(uint16_t) * MAX_BWP_SIZE);
+    prb_block_reapply_ul_row(cell, row);
   }
 }
 
@@ -216,6 +219,287 @@ void nr_mac_signal_sensing_shutdown(void)
   pub_channel_signal_shutdown(&g_sensing_chan);
 }
 #endif /* E3_AGENT */
+
+/* Enumerate the full run of TDAs with this k2 in cell->ul_tda (the list is
+ * ordered by k2, so the run is contiguous). Unlike get_num_ul_tda() this does
+ * not pre-filter on the slot mask: the caller checks each TDA itself, which
+ * removes the "fitting TDAs form a suffix" precondition that additional
+ * TDAs would otherwise violate. Returns the run length, 0 if none. */
+static int nr_sensing_tdas_for_k2(const nr_cell_sched_t *cell, int k2, const NR_tda_info_t **first)
+{
+  *first = NULL;
+  int n = 0;
+  FOR_EACH_SEQ_ARR (NR_tda_info_t *, tda, &cell->ul_tda) {
+    DevAssert(tda->valid_tda);
+    if (tda->k2 < k2)
+      continue;
+    if (tda->k2 > k2)
+      break; /* ordered by k2: no more can match */
+    if (*first == NULL)
+      *first = tda;
+    n++;
+  }
+  return n;
+}
+
+/* The SRS-companion of `best`: same k2, same start symbol, one symbol shorter,
+ * so the UE's aperiodic SRS gets the last symbol to itself. NULL if the list has
+ * no such entry. Searched rather than assumed adjacent, because additional TDAs
+ * are appended to the list. */
+static const NR_tda_info_t *nr_sensing_find_srs_tda(const NR_tda_info_t *tda_list, int n_tda, const NR_tda_info_t *best)
+{
+  for (int i = 0; i < n_tda; i++) {
+    if (tda_list[i].k2 == best->k2 && tda_list[i].startSymbolIndex == best->startSymbolIndex
+        && tda_list[i].nrOfSymbols == best->nrOfSymbols - 1)
+      return &tda_list[i];
+  }
+  return NULL;
+}
+
+/* Pick the TDA best matching the sensing mask for this candidate, by
+ * lexicographic score (higher wins, packed into one uint64_t):
+ *   tier 0 (bit 33)      : is_additional flag, only when policy_active
+ *   tier 1 (bit 32)      : zero-overlap with mask
+ *   tier 2 (bits 24..27) : fewer overlap symbols (popcount 0..14)
+ *   tier 3 (bits  0..23) : nrOfSymbols x free-RB count
+ * Tier 0 is gated on policy_active so additional_ul_tdas bias selection only
+ * once a dApp installs a policy. Returns NULL if no TDA has free RBs. */
+static const NR_tda_info_t *pick_masked_best(const nr_cell_sched_t *cell,
+                                             nr_ul_candidate_t *cand,
+                                             const NR_tda_info_t *tda_list,
+                                             int n_tda,
+                                             frame_t frame,
+                                             slot_t slot,
+                                             uint16_t mask,
+                                             bool policy_active)
+{
+  const int index = ul_buffer_index(frame, slot, cell->frame_structure.numb_slots_frame, cell->vrb_map_UL_size);
+  uint16_t *vrb_map_UL = &cell->common_channels.vrb_map_UL[cand->alloc_beam_idx][index * MAX_BWP_SIZE];
+  /* Every candidate is checked against the slot mask here, so the list need not
+   * be pre-filtered and the TDAs that fit need not form a suffix -- which is why
+   * appending additional_ul_tdas does not require reordering the shared list. */
+  const uint16_t ul_bitmap = get_ul_bitmap(&cell->frame_structure, slot);
+
+  const NR_tda_info_t *best = NULL;
+  uint64_t best_score = 0;
+  for (int i = 0; i < n_tda; i++) {
+    int start = 0, len = cand->bwp_size;
+    uint16_t tda_bits = SL_to_bitmap(tda_list[i].startSymbolIndex, tda_list[i].nrOfSymbols);
+    if ((tda_bits & ul_bitmap) != tda_bits)
+      continue; /* does not fit this slot's UL symbols */
+    get_max_rb_range(vrb_map_UL, cell->ulprbbl, tda_bits, &start, &len);
+    if (len == 0)
+      continue;
+    uint16_t overlap = tda_bits & mask;
+    uint64_t additional = (policy_active && tda_list[i].is_additional) ? 1ULL : 0ULL;
+    uint64_t zero = (overlap == 0) ? 1ULL : 0ULL;
+    uint64_t fewer = (uint64_t)(14 - __builtin_popcount(overlap));
+    uint64_t thr = (uint64_t)tda_list[i].nrOfSymbols * len;
+    uint64_t score = (additional << 33) | (zero << 32) | (fewer << 24) | thr;
+    if (score > best_score) {
+      best = &tda_list[i];
+      best_score = score;
+    }
+  }
+  return best;
+}
+
+/* Stamp the picked TDA onto a candidate (index, tda_info, symbol bitmap) and
+ * return its index. Shared by the new-tx and retx-refit paths; best != NULL. */
+static int nr_sensing_commit_tda(nr_cell_sched_t *cell, nr_ul_candidate_t *cand, const NR_tda_info_t *best)
+{
+  int tda = seq_arr_dist(&cell->ul_tda, seq_arr_front(&cell->ul_tda), best);
+  AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
+  cand->sched_pusch.time_domain_allocation = tda;
+  cand->sched_pusch.tda_info = *best;
+  cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
+  return tda;
+}
+
+/* For a retx, reuse the TDA from the original transmission if it is still valid
+ * for this slot (true), else false so the caller refits. Checks the exact index,
+ * since the same k2 needn't have valid symbols in a mixed slot. Mirrors the inline
+ * reuse in nr_ul_tda_select_default (kept separate to leave OAI's selector intact). */
+static bool nr_ul_retx_reuse_orig_tda(const nr_cell_sched_t *cell,
+                                      nr_ul_candidate_t *cand,
+                                      const NR_tda_info_t *tda_list,
+                                      int n_tda,
+                                      slot_t slot)
+{
+  const NR_sched_pusch_t *orig_sched = &cand->UE->UE_sched_ctrl.ul_harq_processes[cand->retx_harq_pid].sched_pusch;
+  const NR_tda_info_t *orig = seq_arr_at(&cell->ul_tda, orig_sched->time_domain_allocation);
+  ptrdiff_t offset = orig - tda_list;
+  if (offset < 0 || offset >= n_tda)
+    return false;
+  /* Being in the same-k2 run is not enough: this list is not pre-filtered on the
+   * slot mask, so check the symbols fit before reusing. */
+  const uint16_t orig_bits = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
+  const uint16_t ul_bitmap = get_ul_bitmap(&cell->frame_structure, slot);
+  if ((orig_bits & ul_bitmap) != orig_bits)
+    return false;
+  cand->sched_pusch.time_domain_allocation = orig_sched->time_domain_allocation;
+  cand->sched_pusch.tda_info = *orig;
+  cand->alloc_slbitmap = SL_to_bitmap(orig->startSymbolIndex, orig->nrOfSymbols);
+  cand->retx_rbSize = orig_sched->rbSize;
+  return true;
+}
+
+/* Sensing-aware UL TDA selector: pick the best TDA against the per-slot sensing
+ * mask (inactive policy => mask 0 => behaves like the default biggest-TDA pick).
+ * Retx reuses the original TDA when still valid, else refits via the masked pick. */
+int nr_ul_tda_select_sensing(gNB_MAC_INST *mac,
+                             nr_cell_sched_t *cell,
+                             nr_ul_candidate_t *cands,
+                             int n_cand,
+                             frame_t sched_frame,
+                             slot_t sched_slot,
+                             int k2)
+{
+  (void)mac;
+  /* Enumerate the whole same-k2 run rather than get_num_ul_tda()'s pre-filtered
+   * window: pick_masked_best() does its own per-TDA fit check, so the shared
+   * helper's "fitting TDAs form a suffix" precondition -- which appending
+   * additional_ul_tdas would break -- does not have to hold here. */
+  const NR_tda_info_t *tda_list = NULL;
+  int n_tda = nr_sensing_tdas_for_k2(cell, k2, &tda_list);
+  if (n_tda == 0)
+    return 0;
+
+  NR_ServingCellConfigCommon_t *scc = cell->common_channels.ServingCellConfigCommon;
+
+  /* Snapshot the mask + active flag once under the lock, then read them
+   * lock-free per candidate. */
+  uint16_t mask = 0;
+  bool policy_active = false;
+  sensing_policy_state_t *sp = cell->sched_stateful_data;
+  if (sp) {
+    pthread_mutex_lock(&sp->lock);
+    if (sp->active) {
+      policy_active = true;
+      int slot_in_frame = sched_slot % cell->frame_structure.numb_slots_frame;
+      mask = sp->mask[slot_in_frame];
+    }
+    pthread_mutex_unlock(&sp->lock);
+  }
+
+  int n_valid = 0;
+  FOR_EACH_CANDIDATE(cand, cands, n_cand)
+  {
+    if (cand->skipped)
+      continue;
+
+    /* Retransmissions: preserve original TDA when valid; otherwise refit. */
+    if (cand->is_retx) {
+      if (nr_ul_retx_reuse_orig_tda(cell, cand, tda_list, n_tda, sched_slot)) {
+        n_valid++;
+        continue;
+      }
+      /* Original TDA not valid -- pick mask-aware best with TBS refit */
+      const NR_tda_info_t *best = pick_masked_best(cell, cand, tda_list, n_tda, sched_frame, sched_slot, mask, policy_active);
+      if (!best) {
+        cand->skipped = true;
+        continue;
+      }
+      int tda = nr_sensing_commit_tda(cell, cand, best);
+      /* retx-only extra: refit RBs keeping the original TBS; defer if infeasible */
+      uint16_t needed = check_ul_retx_feasibility(cand, tda, best, scc, cand->bwp_size);
+      if (needed == 0) {
+        cand->skipped = true;
+        continue;
+      }
+      cand->retx_rbSize = needed;
+      n_valid++;
+      continue;
+    }
+
+    /* New transmission: pick mask-aware best TDA */
+    const NR_tda_info_t *best = pick_masked_best(cell, cand, tda_list, n_tda, sched_frame, sched_slot, mask, policy_active);
+    if (!best) {
+      cand->skipped = true;
+      continue;
+    }
+    /* Aperiodic SRS shares the slot: the UE transmits SRS on the last symbol, so
+     * the PUSCH must give it up. Look for the same-k2, same-start, one-symbol-
+     * shorter TDA rather than assuming it is the next list entry -- appending
+     * additional_ul_tdas breaks that adjacency. If there is none, drop the SRS
+     * trigger, as the default selector does. */
+    if (cand->sched_srs > 0) {
+      const NR_tda_info_t *srs_best = nr_sensing_find_srs_tda(tda_list, n_tda, best);
+      if (srs_best)
+        best = srs_best;
+      else
+        cand->sched_srs = 0;
+    }
+    nr_sensing_commit_tda(cell, cand, best);
+    n_valid++;
+  }
+  return n_valid;
+}
+
+/* ======================================================================
+ * Sensing policy control (dApp interface)
+ * ====================================================================== */
+
+/* dApp entry point: install (or clear) the per-slot sensing mask under sp->lock.
+ * mask==NULL / n_slots==0 deactivates; otherwise n_slots MUST equal the cell's
+ * slots-per-frame (TDD mismatch is rejected). Sets sp->active, which gates the
+ * mask-aware UL TDA selector. */
+/* Allocate the sensing-policy state behind cell->sched_stateful_data. Starts
+ * inactive: the selector then behaves like the default one until a dApp calls
+ * set_sensing_policy(). */
+void sensing_policy_init(nr_cell_sched_t *cell)
+{
+  sensing_policy_state_t *sp = calloc(1, sizeof(*sp));
+  AssertFatal(sp != NULL, "out of memory allocating sensing_policy_state_t\n");
+  pthread_mutex_init(&sp->lock, NULL);
+  cell->sched_stateful_data = sp;
+}
+
+/* Release the state allocated by sensing_policy_init(). Idempotent. */
+void sensing_policy_free(nr_cell_sched_t *cell)
+{
+  if (cell->sched_stateful_data == NULL)
+    return;
+  sensing_policy_state_t *sp = cell->sched_stateful_data;
+  pthread_mutex_destroy(&sp->lock);
+  free(sp);
+  cell->sched_stateful_data = NULL;
+}
+
+bool set_sensing_policy(nr_cell_sched_t *cell, const uint16_t *mask, int n_slots)
+{
+  sensing_policy_state_t *sp = cell->sched_stateful_data;
+  if (sp == NULL) {
+    LOG_W(NR_MAC, "set_sensing_policy: sensing state not allocated (sensing TDA selector not bound?)\n");
+    return false;
+  }
+
+  /* Reject TDD mismatch: caller must use the gNB's actual slots-per-frame. */
+  if (n_slots != 0 && n_slots != cell->frame_structure.numb_slots_frame) {
+    LOG_W(NR_MAC,
+          "set_sensing_policy: mask n_slots=%d does not match frame slots=%d -- ignoring\n",
+          n_slots,
+          cell->frame_structure.numb_slots_frame);
+    return false;
+  }
+
+  const bool active = (n_slots != 0 && mask != NULL);
+  pthread_mutex_lock(&sp->lock);
+  if (active) {
+    sp->active = true;
+    sp->n_slots = n_slots;
+    memcpy(sp->mask, mask, n_slots * sizeof(sp->mask[0]));
+  } else {
+    sp->active = false;
+    sp->n_slots = 0;
+    memset(sp->mask, 0, sizeof(sp->mask));
+  }
+  pthread_mutex_unlock(&sp->lock);
+
+  /* Log from locals, not sp->* (which are only safe to read under the lock). */
+  LOG_I(NR_MAC, "Sensing policy updated: active=%d n_slots=%d\n", active, active ? n_slots : 0);
+  return true;
+}
 
 /* OR a (PRB-span x symbol-run) rectangle into occupancy[]: clamp the symbols to
  * the 0..14 grid, then set the symbol bitmap on every in-grid PRB of the span. */
@@ -528,6 +812,8 @@ static int nr_scan_sensing_tiles(gNB_MAC_INST *mac,
    * set in vrb_map_UL (schedulers keep refusing them); only this scan subtracts
    * them. The LIVE snapshot is read; a mid-interim shrink self-corrects on the
    * next reseed. */
+  uint16_t prb_block_eff[MAX_BWP_SIZE];
+  const bool have_block = get_effective_prb_block_mask_ul(cell, prb_block_eff);
 
   /* Add the RRC-configured periodic UL control occupancy (SR + periodic CSI +
    * SRS) the UE transmits autonomously but that the reserved-slot VRB reset
@@ -542,7 +828,7 @@ static int nr_scan_sensing_tiles(gNB_MAC_INST *mac,
    * the dApp block (when present), then OR the per-slot control occupancy. */
   uint16_t sense_vrb[MAX_BWP_SIZE];
   for (int rb = 0; rb < MAX_BWP_SIZE; rb++)
-    sense_vrb[rb] = vrb_map_UL[rb] | ctrl_occ[rb];
+    sense_vrb[rb] = (have_block ? (uint16_t)(vrb_map_UL[rb] & (uint16_t)~prb_block_eff[rb]) : vrb_map_UL[rb]) | ctrl_occ[rb];
   if (n_ctrl_prb > 0)
     LOG_D(NR_MAC, "%d.%d sensing mask: %d PRB(s) reserved for UL control\n", frame, slot, n_ctrl_prb);
 

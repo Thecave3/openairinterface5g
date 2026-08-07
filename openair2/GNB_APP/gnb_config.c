@@ -1627,6 +1627,38 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg, nr_cell_sched_t **out_cel
         config.num_agg_level_candidates[PDCCH_AGG_LEVEL16]);
 
 #ifdef E3_AGENT
+  /* Parse additional_ul_tdas: comma-separated "start:length" pairs, e.g. "0:6,0:4" */
+  const char *extra_tdas_str = *GNBParamList.paramarray[0][GNB_ADDITIONAL_UL_TDAS_IDX].strptr;
+  config.num_additional_ul_tdas = 0;
+  if (extra_tdas_str && extra_tdas_str[0] != '\0') {
+    char buf[256];
+    strncpy(buf, extra_tdas_str, sizeof(buf) - 1);
+    buf[sizeof(buf) - 1] = '\0';
+    char *saveptr = NULL;
+    for (char *tok = strtok_r(buf, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
+      AssertFatal(config.num_additional_ul_tdas < MAX_ADDITIONAL_UL_TDAS,
+                  "too many additional_ul_tdas (max %d)\n",
+                  MAX_ADDITIONAL_UL_TDAS);
+      int s, l;
+      AssertFatal(sscanf(tok, "%d:%d", &s, &l) == 2, "invalid additional_ul_tdas entry \"%s\", expected start:length\n", tok);
+      AssertFatal(s >= 0 && s < 14 && l >= 1 && l <= 14 && s + l <= 14,
+                  "additional_ul_tdas entry \"%s\": start %d length %d out of range\n",
+                  tok,
+                  s,
+                  l);
+      config.additional_ul_tdas[config.num_additional_ul_tdas].start_symbol = s;
+      config.additional_ul_tdas[config.num_additional_ul_tdas].num_symbols = l;
+      config.num_additional_ul_tdas++;
+    }
+    LOG_I(GNB_APP, "additional_ul_tdas: %d entries\n", config.num_additional_ul_tdas);
+    for (int i = 0; i < config.num_additional_ul_tdas; i++)
+      LOG_I(GNB_APP,
+            "  additional UL TDA %d: start %d length %d\n",
+            i,
+            config.additional_ul_tdas[i].start_symbol,
+            config.additional_ul_tdas[i].num_symbols);
+  }
+
   /* sensing_target_slots: list of slot indices (mod TDD period) to hard-reserve
    * for sensing. These slots are not allocatable to UEs; the dApp gets a clean
    * sym 0-13 full-PRB sensing range on each of them. */
