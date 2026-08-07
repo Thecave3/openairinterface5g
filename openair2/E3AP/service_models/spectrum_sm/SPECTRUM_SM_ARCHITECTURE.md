@@ -107,7 +107,9 @@ Spectrum-PRBBlacklistControl ::= SEQUENCE {
 A non-empty list **replaces** the persistent block set; an **empty list clears**
 it. The dApp sends the full current list on every change.
 
-The block lives in the per-MAC `prb_block_state_t` (`gNB_scheduler_prb_block.c`).
+The block lives in the per-cell `prb_block_state_t` hanging off `nr_cell_sched_t`
+(`gNB_scheduler_prb_block.c`), allocated in `nr_mac_config_scc()` alongside the
+cell's other scheduler state.
 Enforcement is a per-slot stamp: `apply_prb_block_masks()` OR's the block bitmap
 into `vrb_map` (DL) and `vrb_map_UL` at slot start, so every downstream
 scheduling step treats blocked PRBs as occupied. Static control channels are

@@ -24,6 +24,10 @@ static inline bool nr_slot_is_ul_or_mixed(const frame_structure_t *fs, slot_t sl
  * scan) and are no-ops unless the slot is in sensing_target_slots[].
  * scan_and_publish runs the scan + (Aerial) capture + (E3) publish, and is inert
  * unless sensing_enabled (the master switch). */
+/* Is this (absolute) slot hard-reserved for sensing? The UL conflict-tolerance
+ * sites (PRACH/Msg3) consult it before asserting on an occupied VRB entry. */
+bool nr_mac_ul_slot_is_sensing_reserved(const nr_cell_sched_t *cell, int slot);
+
 void nr_mac_sensing_reserve_ul_slot(nr_cell_sched_t *cell, int prev_slot, frame_t frame);
 void nr_mac_sensing_restore_ul_slot(nr_cell_sched_t *cell, frame_t frame, slot_t slot);
 void nr_mac_sensing_scan_and_publish(gNB_MAC_INST *mac, nr_cell_sched_t *cell, frame_t frame, slot_t slot);

@@ -54,7 +54,22 @@ synchronizing or attaching** (it cannot decode the broadcast / the SIB1 control
 channel). Keep the dApp's mask off the cell-common PRBs, or expect the broadcast
 and random-access path to degrade while such a block is active.
 
-## 3. Dedicated PUCCH / SRS under a block is gracefully dropped
+## 3. SRS beam management overwrites the operator PRB blacklist
+
+`handle_nr_srs_measurements()` (`gNB_scheduler_ulsch.c`) rebuilds `cell->ulprbbl`
+from scratch on every SRS beam-management report:
+
+```c
+memset(ulprbbl, 0, num_rbs * sizeof(uint16_t));
+```
+
+That is the operator's static UL blacklist, not the dApp block (which lives in
+`prb_block_state_t` and is re-stamped every slot), so a dApp block is unaffected.
+It does mean the two mechanisms are not interchangeable: anything written into
+`ulprbbl` while `do_SRS` beam management is active is erased on the next report.
+Use the dApp PRB-block control, not `ulprbbl`, for dynamic blocking.
+
+## 4. Dedicated PUCCH / SRS under a block is gracefully dropped
 
 If the block overlaps a UE's dedicated PUCCH (scheduling request, periodic CSI,
 HARQ-ACK) or its SRS, the gNB skips that reception gracefully (a rate-limited
@@ -64,7 +79,7 @@ PRBs (buffer-status-driven uplink still flows via other grants) and recovers on 
 next occasion once the block lifts. Keep the uplink mask off connected UEs'
 dedicated PUCCH/SRS PRBs, or accept transient SR/CSI/SRS loss.
 
-## 4. CSI-RS still transmits on blocked downlink PRBs
+## 5. CSI-RS still transmits on blocked downlink PRBs
 
 CSI-RS is configured at RRC setup on fixed PRBs and symbols, and the gNB emits it
 unconditionally — the radio transmits it regardless of the scheduler's resource
@@ -75,7 +90,7 @@ block), but detection does not silence it. The resource map is the MAC's allocat
 tracker, not a transmission gate (the operator's static PRB blacklist had the same
 property).
 
-## 5. A prolonged block can stall a HARQ retransmission
+## 6. A prolonged block can stall a HARQ retransmission
 
 A retransmission must reuse its original transport-block size, so it cannot shrink
 to fit around a block. If a block sits continuously on the only PRBs a
@@ -84,20 +99,20 @@ timeout drops the UE — so the block can *stall* a UE, not just throttle it, an
 there is no give-up guard or log trace for this case today. Keep a sustained uplink
 block off an active UE's only retransmission PRBs.
 
-## 6. Reception is not gated by the block
+## 7. Reception is not gated by the block
 
 The resource map controls MAC allocation, not radio reception. If a UE transmits on
 a blocked uplink PRB anyway (for example PRACH from a UE that does not know about
 the block), the radio still receives it. The dApp's "silence" on a blocked PRB is
 best-effort against new MAC scheduling, not a hard guarantee against all activity.
 
-## 7. Configured Grants ignore the block — by absence
+## 8. Configured Grants ignore the block — by absence
 
 The gNB does not implement Configured-Grant uplink scheduling, so this is not a
 concern today. If Configured-Grant support is added, revisit this: a UE with a
 configured grant would transmit on its preallocated PRBs regardless of the mask.
 
-## 8. Very high subcarrier spacings need stamp-cost tuning
+## 9. Very high subcarrier spacings need stamp-cost tuning
 
 Re-stamping the whole uplink resource ring on a block change costs time
 proportional to the ring size. At 30 kHz spacing (sub-6 GHz) this is a few
@@ -106,7 +121,7 @@ much larger and can approach the (shorter) slot deadline, so a block change coul
 make a scheduler tick overrun. This deployment targets sub-6 GHz; mm-wave would need
 the stamp split across several ticks.
 
-## 9. Released PRBs return within about one ring cycle
+## 10. Released PRBs return within about one ring cycle
 
 After the block shrinks or clears, freed uplink PRBs may stay marked as occupied for
 up to one uplink-ring cycle (about 10–20 ms at 30 kHz spacing) until the ring slices

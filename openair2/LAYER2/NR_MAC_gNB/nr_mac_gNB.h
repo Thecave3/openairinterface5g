@@ -1321,6 +1321,12 @@ typedef struct nr_cell_sched_s {
   /// Derived at config time from the presence of sensing_target_slots.
   bool sensing_enabled;
 
+  /// PRB blocking state populated by the dApp control plane and OR'd into this
+  /// cell's VRB maps at slot start, before any scheduling step runs. Allocated
+  /// only in E3 builds; NULL is the "no dApp control plane" guard every
+  /// accessor checks.
+  struct prb_block_state_s *prb_block;
+
   /// Per-cell KPI statistics
   NR_du_stats_t du_stats;
   uint64_t num_scheduled_prach_rx;
