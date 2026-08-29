@@ -6,10 +6,14 @@
 #define RAN_FUNC_SM_RAN_CTRL_SUBSCRIPTION_AGENT_H
 
 #include "openair2/E2AP/flexric/src/sm/rc_sm/ie/rc_data_ie.h"
+#include "openair2/E2AP/flexric/src/lib/e2ap/ric_gen_id_wrapper.h"
 #include "common/utils/ds/seq_arr.h"
 
 typedef struct ran_param_data {
-  uint32_t ric_req_id;
+  // The whole RIC ID: the Requestor ID alone does not identify a subscription
+  // (E2AP identifies one by {RequestorID, InstanceID}), so keying on it lets one
+  // xApp's subscription erase another's on release and misdirects indications.
+  ric_gen_id_t ric_id;
   e2sm_rc_event_trigger_t ev_tr;
 } ran_param_data_t;
 
@@ -21,6 +25,6 @@ typedef struct {
 
 void init_rc_subs_data(rc_subs_data_t *rc_subs_data);
 void insert_rc_subs_data(seq_arr_t *seq_arr, ran_param_data_t *data);
-void remove_rc_subs_data(rc_subs_data_t *rc_subs_data, uint32_t ric_req_id);
+void remove_rc_subs_data(rc_subs_data_t *rc_subs_data, ric_gen_id_t ric_id);
 
 #endif

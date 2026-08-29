@@ -621,10 +621,13 @@ static rc_ind_data_t* fill_ue_rrc_state_change(const gNB_RRC_UE_t *rrc_ue_contex
   return rc_ind;
 }
 
-static void send_aper_ric_ind(const uint32_t ric_req_id, rc_ind_data_t* rc_ind_data)
+static void send_aper_ric_ind(const ric_gen_id_t ric_id, rc_ind_data_t* rc_ind_data)
 {
-  async_event_agent_api(ric_req_id, rc_ind_data);
-  printf("[E2 AGENT] Event for RIC request ID %d generated\n", ric_req_id);
+  async_event_agent_api(ric_id, rc_ind_data);
+  printf("[E2 AGENT] Event for RAN_FUNC_ID %d RIC_REQ_ID %d INST_ID %d generated\n",
+         ric_id.ran_func_id,
+         ric_id.ric_req_id,
+         ric_id.ric_inst_id);
 }
 
 static rc_ind_data_t* fill_ue_id(const gNB_RRC_UE_t *rrc_ue_context, const uint16_t cond_id)
@@ -671,14 +674,18 @@ static rc_ind_data_t* fill_ue_id(const gNB_RRC_UE_t *rrc_ue_context, const uint1
   return rc_ind;
 }
 
-static void check_ue_id_cond(const gNB_RRC_UE_t *rrc_ue_context, const uint16_t class, const uint32_t msg_id, const uint32_t ric_req_id, const e2sm_rc_ev_trg_frmt_1_t *frmt_1)
+static void check_ue_id_cond(const gNB_RRC_UE_t* rrc_ue_context,
+                             const uint16_t class,
+                             const uint32_t msg_id,
+                             const ric_gen_id_t ric_id,
+                             const e2sm_rc_ev_trg_frmt_1_t* frmt_1)
 {
   for (size_t i = 0; i < frmt_1->sz_msg_ev_trg; i++) {
     msg_ev_trg_t *ev_item = &frmt_1->msg_ev_trg[i];
     if ((ev_item->msg_type == RRC_MSG_MSG_TYPE_EV_TRG && ev_item->rrc_msg.type == NR_RRC_MESSAGE_ID && ev_item->rrc_msg.nr == class && ev_item->rrc_msg.rrc_msg_id == msg_id)  // rrcSetupComplete
          || (ev_item->msg_type == NETWORK_INTERFACE_MSG_TYPE_EV_TRG && ev_item->net.ni_type == class)) {  // "F1 UE Context Setup Request", but in the subscription the class (F1) can only be specified which translates to any F1 msg
       rc_ind_data_t* rc_ind_data = fill_ue_id(rrc_ue_context, ev_item->ev_trigger_cond_id);
-      send_aper_ric_ind(ric_req_id, rc_ind_data);
+      send_aper_ric_ind(ric_id, rc_ind_data);
     }
   }
 }
@@ -694,13 +701,16 @@ void signal_ue_id(const gNB_RRC_UE_t *rrc_ue_context, const uint16_t class, cons
   const size_t num_subs = seq_arr_size(&rc_subs_data.rs1_param4);
   for (size_t sub_idx = 0; sub_idx < num_subs; sub_idx++) {
     const ran_param_data_t data = *(const ran_param_data_t *)seq_arr_at(&rc_subs_data.rs1_param4, sub_idx);
-    check_ue_id_cond(rrc_ue_context, class, msg_id, data.ric_req_id, &data.ev_tr.frmt_1);
+    check_ue_id_cond(rrc_ue_context, class, msg_id, data.ric_id, &data.ev_tr.frmt_1);
   }
 
   pthread_mutex_unlock(&rc_mutex);
 }
 
-static void check_rrc_state(const gNB_RRC_UE_t *rrc_ue_context, const rrc_state_e2sm_rc_e rrc_state, const uint32_t ric_req_id, const e2sm_rc_ev_trg_frmt_4_t *frmt_4)
+static void check_rrc_state(const gNB_RRC_UE_t* rrc_ue_context,
+                            const rrc_state_e2sm_rc_e rrc_state,
+                            const ric_gen_id_t ric_id,
+                            const e2sm_rc_ev_trg_frmt_4_t* frmt_4)
 {
   for (size_t i = 0; i < frmt_4->sz_ue_info_chng; i++) {
     const uint16_t cond_id = frmt_4->ue_info_chng[i].ev_trig_cond_id;
@@ -709,7 +719,7 @@ static void check_rrc_state(const gNB_RRC_UE_t *rrc_ue_context, const rrc_state_
       const rrc_state_e2sm_rc_e ev_tr_rrc_state = rrc_elem->state_chng_to[j].state_chngd_to;
       if (ev_tr_rrc_state == rrc_state || ev_tr_rrc_state == ANY_RRC_STATE_E2SM_RC) {
         rc_ind_data_t* rc_ind_data = fill_ue_rrc_state_change(rrc_ue_context, rrc_state, cond_id);
-        send_aper_ric_ind(ric_req_id, rc_ind_data);
+        send_aper_ric_ind(ric_id, rc_ind_data);
       }
     }
   }
@@ -726,7 +736,7 @@ void signal_rrc_state_changed_to(const gNB_RRC_UE_t *rrc_ue_context, const rrc_s
   const size_t num_subs = seq_arr_size(&rc_subs_data.rs4_param202);
   for (size_t sub_idx = 0; sub_idx < num_subs; sub_idx++) {
     const ran_param_data_t data = *(const ran_param_data_t *)seq_arr_at(&rc_subs_data.rs4_param202, sub_idx);
-    check_rrc_state(rrc_ue_context, rrc_state, data.ric_req_id, &data.ev_tr.frmt_4);
+    check_rrc_state(rrc_ue_context, rrc_state, data.ric_id, &data.ev_tr.frmt_4);
   }
 
   pthread_mutex_unlock(&rc_mutex);
@@ -762,7 +772,11 @@ static rc_ind_data_t* fill_rrc_msg_copy(const byte_array_t rrc_ba, const uint16_
   return rc_ind;
 }
 
-static void check_rrc_msg_copy(const nr_rrc_class_e nr_channel, const uint32_t rrc_msg_id, const byte_array_t rrc_ba, const uint32_t ric_req_id, const e2sm_rc_ev_trg_frmt_1_t *frmt_1)
+static void check_rrc_msg_copy(const nr_rrc_class_e nr_channel,
+                               const uint32_t rrc_msg_id,
+                               const byte_array_t rrc_ba,
+                               const ric_gen_id_t ric_id,
+                               const e2sm_rc_ev_trg_frmt_1_t* frmt_1)
 {
   for (size_t i = 0; i < frmt_1->sz_msg_ev_trg; i++) {
     if (frmt_1->msg_ev_trg[i].msg_type != RRC_MSG_MSG_TYPE_EV_TRG)
@@ -771,7 +785,7 @@ static void check_rrc_msg_copy(const nr_rrc_class_e nr_channel, const uint32_t r
       continue;
     if (frmt_1->msg_ev_trg[i].rrc_msg.nr == nr_channel && frmt_1->msg_ev_trg[i].rrc_msg.rrc_msg_id == rrc_msg_id) {
       rc_ind_data_t* rc_ind_data = fill_rrc_msg_copy(rrc_ba, frmt_1->msg_ev_trg[i].ev_trigger_cond_id);
-      send_aper_ric_ind(ric_req_id, rc_ind_data);
+      send_aper_ric_ind(ric_id, rc_ind_data);
     }
   }
 }
@@ -787,15 +801,15 @@ void signal_rrc_msg(const nr_rrc_class_e nr_channel, const uint32_t rrc_msg_id, 
   const size_t num_subs = seq_arr_size(&rc_subs_data.rs1_param3);
   for (size_t sub_idx = 0; sub_idx < num_subs; sub_idx++) {
     const ran_param_data_t data = *(const ran_param_data_t *)seq_arr_at(&rc_subs_data.rs1_param3, sub_idx);
-    check_rrc_msg_copy(nr_channel, rrc_msg_id, rrc_ba, data.ric_req_id, &data.ev_tr.frmt_1);
+    check_rrc_msg_copy(nr_channel, rrc_msg_id, rrc_ba, data.ric_id, &data.ev_tr.frmt_1);
   }
 
   pthread_mutex_unlock(&rc_mutex);
 }
 
-static void free_aperiodic_subscription(uint32_t ric_req_id)
+static void free_aperiodic_subscription(ric_gen_id_t ric_id)
 {
-  remove_rc_subs_data(&rc_subs_data, ric_req_id);
+  remove_rc_subs_data(&rc_subs_data, ric_id);
 }
 
 static seq_arr_t *get_sa(const e2sm_rc_event_trigger_t *ev_tr, const uint32_t ran_param_id)
@@ -825,14 +839,17 @@ static seq_arr_t *get_sa(const e2sm_rc_event_trigger_t *ev_tr, const uint32_t ra
   return sa;
 }
 
-static void get_list_for_report_style(const uint32_t ric_req_id, const e2sm_rc_event_trigger_t *ev_tr, const size_t sz, const param_report_def_t *param_def)
+static void get_list_for_report_style(const ric_gen_id_t ric_id,
+                                      const e2sm_rc_event_trigger_t* ev_tr,
+                                      const size_t sz,
+                                      const param_report_def_t* param_def)
 {
   for (size_t i = 0; i < sz; i++) {
     seq_arr_t *sa = get_sa(ev_tr, param_def[i].ran_param_id);
     if (!sa) {
       printf("[E2 AGENT] Requested RAN Parameter ID %d not yet implemented", param_def[i].ran_param_id);
     } else {
-      struct ran_param_data data = { .ric_req_id = ric_req_id, .ev_tr = cp_e2sm_rc_event_trigger(ev_tr) };
+      struct ran_param_data data = {.ric_id = ric_id, .ev_tr = cp_e2sm_rc_event_trigger(ev_tr)};
       insert_rc_subs_data(sa, &data);
     }
   }
@@ -846,7 +863,7 @@ sm_ag_if_ans_t write_subs_rc_sm(void const* src)
 
   sm_ag_if_ans_t ans = {0};
 
-  const uint32_t ric_req_id = wr_rc->ric_req_id;
+  const ric_gen_id_t ric_id = wr_rc->ric_id;
   const uint32_t report_style = wr_rc->rc.ad->ric_style_type;
   // 9.2.1.2  RIC ACTION DEFINITION IE
   switch (wr_rc->rc.ad->format) {
@@ -856,7 +873,10 @@ sm_ag_if_ans_t write_subs_rc_sm(void const* src)
       if (wr_rc->rc.et.format + 1 != report_style) { // wr_rc->rc.et.format is an enum -> initialization starts from 0
         AssertError(false, return ans, "[E2 AGENT] Event Trigger Definition Format %d doesn't correspond to REPORT style %d.\n", wr_rc->rc.et.format + 1, report_style);
       }
-      get_list_for_report_style(ric_req_id, &wr_rc->rc.et, wr_rc->rc.ad->frmt_1.sz_param_report_def, wr_rc->rc.ad->frmt_1.param_report_def);
+      get_list_for_report_style(ric_id,
+                                &wr_rc->rc.et,
+                                wr_rc->rc.ad->frmt_1.sz_param_report_def,
+                                wr_rc->rc.ad->frmt_1.param_report_def);
       break;
     }
 
