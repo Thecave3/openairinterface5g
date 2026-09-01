@@ -21,8 +21,6 @@
 
 typedef struct {
   e3_agent_handle_t *agent;
-  e3_service_model_handle_t **service_models;
-  size_t num_service_models;
   int encoding; /* E3_ENCODING_{ASN1,JSON,PROTOBUF}, from the config file */
 } e3_agent_global_t;
 
