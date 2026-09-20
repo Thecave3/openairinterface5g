@@ -66,9 +66,17 @@ static uint32_t min_subscription_period_us(uint32_t ran_function_id)
   return min_us;
 }
 
-static void e2_e3_bridge(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *report_data, size_t report_size)
+static void e2_e3_bridge(uint32_t dapp_id,
+                         uint32_t ran_function_id,
+                         const uint8_t *report_data,
+                         size_t report_size,
+                         uint32_t sequence_id)
 {
-  E3_LOG_D("Received dApp report for RAN function %u from dApp %u (%zu bytes)\n", ran_function_id, dapp_id, report_size);
+  E3_LOG_D("Received dApp report for RAN function %u from dApp %u (%zu bytes, seq=%u)\n",
+           ran_function_id,
+           dapp_id,
+           report_size,
+           sequence_id);
 #ifdef E2_AGENT
   if (!report_data && report_size > 0) {
     E3_LOG_E("Invalid dApp report payload: report_data is NULL while report_size=%zu\n", report_size);
@@ -229,7 +237,7 @@ int e3_destroy()
   return 0;
 }
 
-int e3_send_xapp_control(uint32_t dapp_id, uint32_t ran_function_id, const uint8_t *data, size_t len)
+int e3_send_xapp_control(uint32_t dapp_id, uint32_t sequence_id, uint32_t ran_function_id, const uint8_t *data, size_t len)
 {
   if (!e3.agent) {
     E3_LOG_E("E3 agent not initialized: cannot send xApp control\n");
@@ -241,7 +249,7 @@ int e3_send_xapp_control(uint32_t dapp_id, uint32_t ran_function_id, const uint8
     return -1;
   }
 
-  e3_error_t err = e3_agent_send_xapp_control(e3.agent, dapp_id, ran_function_id, data, len);
+  e3_error_t err = e3_agent_send_xapp_control(e3.agent, dapp_id, ran_function_id, data, len, sequence_id);
   if (err != E3_SUCCESS) {
     E3_LOG_E("Failed to send xApp control to dApp %u for RAN function %u (err=%d)\n", dapp_id, ran_function_id, err);
     return -1;

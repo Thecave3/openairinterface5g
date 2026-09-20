@@ -19,6 +19,10 @@ typedef struct prb_block_state_s {
   bool active_dl;
   bool active_ul;
   bool needs_ul_full_stamp; /* one-shot: next apply stamps mask_ul into every ring slice */
+  /* The xApp procedure whose control this install carries out, or 0 when the
+   * block was the dApp's own decision. Reported once the mask is on the air,
+   * so the RAN can tell that xApp when its decision took effect. */
+  uint32_t pending_sequence_id;
   uint16_t mask_dl[MAX_BWP_SIZE]; /* per-PRB symbol bitmap (absolute PRB index) */
   uint16_t mask_ul[MAX_BWP_SIZE];
   uint16_t prev_mask_dl[MAX_BWP_SIZE]; /* bits dropped from mask_dl, still in the ring */
@@ -49,6 +53,24 @@ void prb_block_free(nr_cell_sched_t *cell);
  * Takes the MAC instance too: the registry scan it triggers runs under sched_lock,
  * which stays on gNB_MAC_INST. */
 bool set_prb_block_mask(gNB_MAC_INST *mac, nr_cell_sched_t *cell, prb_block_dir_t dir, const uint16_t *mask, int len);
+
+/* Name the xApp procedure the next set_prb_block_mask() call carries out, on
+ * this thread. Thread-local and consumed by that call: it keeps the MAC free of
+ * any E3 header while still letting the scheduler tick report back to the right
+ * procedure. Leave it unset (or pass 0) for a block the dApp decided on its own. */
+void prb_block_set_pending_procedure(uint32_t sequence_id);
+
+/* Called on the scheduler thread by apply_prb_block_masks() once an install
+ * reaches the air. Weak here and defined strongly by the E3 agent, so a build
+ * without E3 links a no-op rather than a dependency. Runs inside the slot
+ * deadline: implementations must not block. */
+void prb_block_on_air_hook(uint32_t sequence_id, uint16_t sfn, uint16_t slot);
+
+/* Called when a later install replaces one that has not reached the air yet, so
+ * whoever is waiting on the replaced procedure learns it was applied and then
+ * superseded rather than waiting for an on-air instant that will never come.
+ * Weak, same as above. */
+void prb_block_superseded_hook(uint32_t sequence_id);
 
 /* OR both masks into the current-slot VRB maps. Call once per slot, after vrb_map
  * seeding and before any scheduling step. */

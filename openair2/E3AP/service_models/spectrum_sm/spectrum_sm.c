@@ -56,6 +56,7 @@ typedef enum { PRB_BLOCK_DIR_DL = 0, PRB_BLOCK_DIR_UL = 1 } prb_block_dir_t;
  * (control-region protection applied inside). The dApp sends the full current
  * list each change; the RAN mirrors it. Strong def in gNB_scheduler_prb_block.c. */
 extern bool set_prb_block_mask(gNB_MAC_INST *mac, nr_cell_sched_t *cell, prb_block_dir_t dir, const uint16_t *mask, int len);
+extern void prb_block_set_pending_procedure(uint32_t sequence_id);
 
 static spectrum_sm_context_t spectrum_ctx = {.lock = PTHREAD_MUTEX_INITIALIZER};
 static uint8_t *spectrum_ran_function_data = NULL;
@@ -95,7 +96,8 @@ static e3_error_t spectrum_sm_process_control(e3_service_model_handle_t *sm_hand
                                               uint32_t ran_function_id,
                                               uint32_t control_id,
                                               const uint8_t *data,
-                                              size_t data_len);
+                                              size_t data_len,
+                                              uint32_t sequence_id);
 
 static e3_c_service_model_desc_t spectrum_sm_desc = {
     .name = "spectrum_sm",
@@ -472,7 +474,8 @@ static void format_prb_list(char *buf, size_t sz, const uint16_t *prbs, size_t n
 static e3_error_t spectrum_process_prb_block(e3_service_model_handle_t *sm_handle,
                                              uint32_t request_message_id,
                                              const uint8_t *data,
-                                             size_t data_len)
+                                             size_t data_len,
+                                             uint32_t sequence_id)
 {
   gNB_MAC_INST *mac = (RC.nrmac && RC.nrmac[0]) ? RC.nrmac[0] : NULL;
   nr_cell_sched_t *cell = nr_mac_e3_default_cell();
@@ -506,6 +509,10 @@ static e3_error_t spectrum_process_prb_block(e3_service_model_handle_t *sm_handl
 
   char prb_list_str[2048];
   format_prb_list(prb_list_str, sizeof(prb_list_str), control_payload->blacklisted_prbs, n_prbs);
+
+  /* Name the procedure the UL install carries out, so the scheduler tick that
+   * puts the mask on the air can report back to the xApp that asked for it. */
+  prb_block_set_pending_procedure(sequence_id);
 
   /* Install in both directions. set_prb_block_mask takes prb_block->lock per
    * call; a scheduler tick landing between the two acquires may see UL-new /
@@ -574,7 +581,8 @@ static e3_error_t spectrum_sm_process_control(e3_service_model_handle_t *sm_hand
                                               uint32_t ran_function_id,
                                               uint32_t control_id,
                                               const uint8_t *data,
-                                              size_t data_len)
+                                              size_t data_len,
+                                              uint32_t sequence_id)
 {
   (void)dapp_id;
 
@@ -604,8 +612,10 @@ static e3_error_t spectrum_sm_process_control(e3_service_model_handle_t *sm_hand
 
   switch (control_id) {
     case SPECTRUM_SM_CONTROL_ID_PRB_BLOCK:
-      return spectrum_process_prb_block(sm_handle, request_message_id, data, data_len);
+      return spectrum_process_prb_block(sm_handle, request_message_id, data, data_len, sequence_id);
     case SPECTRUM_SM_CONTROL_ID_SENSING_POLICY:
+      /* The sensing policy has no apply-outcome to report, so it does not open
+       * a procedure and the id is unused on this path. */
       return spectrum_process_sensing_policy(sm_handle, request_message_id, data, data_len);
     default:
       SPEC_LOG_E("unknown control_id %u\n", control_id);

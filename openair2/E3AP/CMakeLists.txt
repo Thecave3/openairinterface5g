@@ -11,16 +11,16 @@ find_package(PkgConfig REQUIRED)
 #    definitions. Earlier ones exported a quoted -DLATREC_DEFAULT_DIR whose
 #    quotes pkg-config strips; 0.1.3 made that macro PRIVATE and made libe3's
 #    install step reject any quoted-value PUBLIC define.
-#  - 0.2.0 adds a correlation id to the control and report callbacks, which
-#    this agent does not pass.
-pkg_check_modules(CLIBE3 REQUIRED libe3>=0.1.3 libe3<0.2.0)
+#  - 0.2.0 adds the correlation id this agent now carries on the control and
+#    report callbacks, so it is the floor rather than the ceiling it was when
+#    the agent still used the 0.1.x signatures.
+pkg_check_modules(CLIBE3 REQUIRED libe3>=0.2.0)
 
 if(NOT CLIBE3_FOUND)
     message(FATAL_ERROR "libe3 not found and required for E3 Agent")
 endif()
 
-# Two constraints make pkg_check_modules report the version per module.
-message(STATUS "Using for E3AP libe3 version: ${CLIBE3_libe3_VERSION}")
+message(STATUS "Using for E3AP libe3 version: ${CLIBE3_VERSION}")
 
 # libe3's feature macros, as bare names for target_compile_definitions().
 # libe3.pc is generated from the libe3 target's INTERFACE_COMPILE_DEFINITIONS,
@@ -52,7 +52,7 @@ message(STATUS "libe3 E3AP encodings: ${CLIBE3_ENCODINGS}")
 # No encoder at all is a broken libe3, not a deployment choice.
 if(NOT CLIBE3_ENCODINGS)
     message(FATAL_ERROR
-        "libe3 ${CLIBE3_libe3_VERSION} was built with no E3AP encoder at all "
+        "libe3 ${CLIBE3_VERSION} was built with no E3AP encoder at all "
         "(none of LIBE3_ENABLE_{ASN1,JSON,PROTOBUF}); every value of "
         "E3Configuration.encoding would fail at gNB startup. Rebuild libe3 "
         "with at least one of them ON.")
@@ -62,7 +62,7 @@ endif()
 # and sets the key explicitly. e3_readconfig() fails the run if one does not.
 if(NOT "asn1" IN_LIST CLIBE3_ENCODINGS)
     message(WARNING
-        "libe3 ${CLIBE3_libe3_VERSION} has no asn1 encoder, but asn1 is the "
+        "libe3 ${CLIBE3_VERSION} has no asn1 encoder, but asn1 is the "
         "E3Configuration.encoding default: every gNB conf used with this build "
         "must set encoding explicitly (to one of ${CLIBE3_ENCODINGS}) or the "
         "run aborts at startup.")
@@ -80,7 +80,7 @@ foreach(_enc IN LISTS E3_REQUIRED_ENCODINGS)
         string(TOUPPER "${_enc}" _enc_upper)
         message(FATAL_ERROR
             "E3_REQUIRED_ENCODINGS lists '${_enc}' but libe3 "
-            "${CLIBE3_libe3_VERSION} was built without it (it has: "
+            "${CLIBE3_VERSION} was built without it (it has: "
             "${CLIBE3_ENCODINGS}). Rebuild libe3 with "
             "-DLIBE3_ENABLE_${_enc_upper}=ON, or drop '${_enc}' from "
             "E3_REQUIRED_ENCODINGS.")
@@ -92,7 +92,7 @@ unset(_enc_upper)
 include_directories(${CLIBE3_INCLUDE_DIRS})
 
 add_subdirectory(service_models)
-add_library(e3ap e3_agent.c config/e3_config.c)
+add_library(e3ap e3_agent.c config/e3_config.c e3_pending_ctrl.c)
 
 # target_link_libraries(e3ap PUBLIC OCP_ITTI) # TODO
 
