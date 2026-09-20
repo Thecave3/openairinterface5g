@@ -29,6 +29,7 @@ target_include_directories(spectrum_sm PUBLIC
 )
 
 target_compile_definitions(spectrum_sm PRIVATE E3_AGENT)
+target_compile_definitions(spectrum_sm PRIVATE ${CLIBE3_COMPILE_DEFS})
 
 target_link_directories(spectrum_sm PRIVATE ${CLIBE3_LIBRARY_DIRS})
 target_link_libraries(spectrum_sm spectrum_sm_asn1 json-c rt pthread LOG)

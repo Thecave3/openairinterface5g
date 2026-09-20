@@ -9,6 +9,7 @@ target_include_directories(e3_sm_worker PUBLIC
     ${CMAKE_SOURCE_DIR}
     ${CLIBE3_INCLUDE_DIRS}
 )
+target_compile_definitions(e3_sm_worker PRIVATE ${CLIBE3_COMPILE_DEFS})
 target_link_directories(e3_sm_worker PRIVATE ${CLIBE3_LIBRARY_DIRS})
 target_link_libraries(e3_sm_worker pthread LOG)
 
