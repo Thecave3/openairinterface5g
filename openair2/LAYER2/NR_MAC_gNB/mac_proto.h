@@ -28,6 +28,8 @@ int get_dl_slots_per_period(const frame_structure_t *fs);
 int get_full_ul_slots_per_period(const frame_structure_t *fs);
 int get_full_dl_slots_per_period(const frame_structure_t *fs);
 int get_ul_slot_offset(const frame_structure_t *fs, int idx, bool count_mixed);
+/* get_ul_slot_offset() for a cell's periodic UCI and SRS: skips the UL slots it reserves for sensing */
+int get_cell_ul_slot_offset(const nr_cell_sched_t *cell, int idx, bool count_mixed);
 void delete_nr_ue_data(NR_UE_info_t *UE, uid_allocator_t *uia);
 
 void mac_top_init_gNB(ngran_node_t node_type,
