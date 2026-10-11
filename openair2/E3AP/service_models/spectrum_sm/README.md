@@ -188,7 +188,7 @@ Besides the telemetry, the SM accepts controls:
 - **In:** the dApp sends commands — most importantly "block this set of PRBs (uplink and/or downlink)." The SM hands the PRB list to the scheduler (see *PRB-block actuation*). The command arrives in the wire format selected by `E3Configuration.encoding` (see *Configuration reference*).
 - **Out:** the gNB can also relay a dApp report onward to a higher-layer xApp (the E2–E3 bridge). The bridge is not implemented yet.
 
-**Lifecycle nuance (deliberate):** the SM is *force-started* when the agent registers it, so controls are accepted from gNB boot, before any dApp subscribes. But `libe3` ties the running state to subscriptions: when a dApp that subscribed later releases its *last* subscription, `libe3` stops the SM, and further controls are NACKed ("no running SM") until a new subscription restarts it. That is intentional — a torn-down session should not keep actuating the scheduler — and on SM stop the gNB defensively clears any active PRB block and sensing policy.
+**Lifecycle nuance (deliberate):** `libe3` ties the running state to subscriptions. The SM is started by the first dApp subscription, so a control sent before that is NACKed ("no running SM"); when the dApp releases its *last* subscription, `libe3` stops the SM and further controls are NACKed until a new subscription restarts it. That is intentional — a torn-down session should not keep actuating the scheduler — and on SM stop the gNB defensively clears any active PRB block and sensing policy.
 
 ---
 
@@ -206,9 +206,9 @@ The dApp sends the *complete* current PRB set on every change; the gNB mirrors i
 
 ---
 
-## Reliable dApp→gNB control
+## dApp→gNB control delivery
 
-The dApp→gNB hop shares a lossy publish/subscribe channel with the high-rate report stream, so a single control command could be dropped. For commands that must not be lost (re-issuing an xApp's block), the dApp sends them **reliably**: each command carries a sequence number, the gNB acknowledges every command it applies, and the dApp retransmits an unacknowledged command at a fixed interval until it is acked (or a retry limit is hit). Duplicates (from retransmits) are detected by sequence number and applied once. This reliability layer lives inside `libe3`; the gNB side simply acks. The detector's own best-effort auto-block does not use this — only the must-not-lose re-issue path does.
+A control is sent once. `libe3` has no retransmission, sequence-number or duplicate layer for it: the gNB answers each control with an `E3-MessageAck` (positive when it was applied, negative when it was refused), and the ack means the block is installed in the MAC, not yet on air (it takes effect from the next slot). A control lost on the way is therefore not repeated by `libe3`; a dApp that cannot afford that must watch the acks and resend, or resend its current set periodically (the set is complete and replaces the previous one, so a repeat is harmless). A dApp that sends a control only when the set changed, as the spectrum dApp does, corrects a lost control at its next change.
 
 ---
 

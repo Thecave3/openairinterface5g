@@ -76,9 +76,12 @@ If the block overlaps a UE's dedicated PUCCH (scheduling request, periodic CSI,
 HARQ-ACK) or its SRS, the gNB skips that reception gracefully (a rate-limited
 warning) rather than asserting, and the collision is reported by the detection
 described above. That UE loses SR/CSI/SRS for as long as the block overlaps those
-PRBs (buffer-status-driven uplink still flows via other grants) and recovers on the
-next occasion once the block lifts. Keep the uplink mask off connected UEs'
-dedicated PUCCH/SRS PRBs, or accept transient SR/CSI/SRS loss.
+PRBs. A short block is tolerated (buffer-status-driven uplink still flows via other
+grants) and the UE recovers on the next occasion once it lifts, but a block that stays
+over the PUCCH makes the gNB log `Cannot schedule SR` and `Detected UL Failure`, and the
+UE falls back to random access, which also fails while the block covers the PRACH PRBs
+(the lowest PRBs in this cell). Keep the uplink mask off connected UEs' dedicated
+PUCCH/SRS PRBs.
 
 ## CSI-RS still transmits on blocked downlink PRBs
 

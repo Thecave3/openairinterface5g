@@ -88,7 +88,8 @@ the wire by a RAN-function id and registered with the agent at startup.
 | 1 | Spectrum SM | uplink sensing ranges: the free time-frequency tiles of each UL slot | [`service_models/spectrum_sm`](service_models/spectrum_sm/README.md) |
 | 2 | L1-KPM SM | post-FFT IQ from the PHY | [`service_models/l1_kpm_sm`](service_models/l1_kpm_sm/README.md) |
 
-Both are telemetry-out only. Code is split by what it depends on:
+Both stream telemetry to the dApp; the Spectrum SM also accepts controls (a PRB block and a
+sensing policy, see its README). Code is split by what it depends on:
 
 - `service_models/<sm>/` holds the message definitions (ASN.1 and Protocol Buffers),
   the encoders and the SM callbacks. `service_models/e3_sm_worker.c` (the telemetry
