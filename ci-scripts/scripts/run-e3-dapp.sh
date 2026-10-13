@@ -23,8 +23,9 @@
 # The dApp is the PyPI `dapps` package; it runs its shipped example
 # (`python -m examples.spectrum_dapp`), headless, for a bounded window. It is
 # installed into a throwaway virtual environment. Its E3 binding, libe3py, is
-# built by pip against the libe3 installed on the test host, so the host needs
-# libe3 of the same release (./build_libe3 --all-encodings --install).
+# built by pip against the libe3 installed on the test host and refuses any other
+# version, so the host needs libe3 (./build_libe3 --all-encodings --install) and
+# libe3py is pinned to the version it reports.
 
 set -u
 
@@ -49,8 +50,10 @@ if [ "${SKIP_PIP}" != "1" ]; then
     python3 -m venv "${WORK}/venv" \
         || { echo "[e3-ci] cannot create a virtual environment (python3-venv)" >&2; exit 2; }
     PY="${WORK}/venv/bin/python"
-    "${PY}" -m pip install -U "${DAPPS_SPEC}" > "${WORK}/pip.log" 2>&1 \
-        || { echo "[e3-ci] pip install '${DAPPS_SPEC}' failed:" >&2; tail -20 "${WORK}/pip.log" >&2; exit 2; }
+    LIBE3_VER="$(pkg-config --modversion libe3 2>/dev/null)" \
+        || { echo "[e3-ci] libe3 is not installed on this host (pkg-config libe3)" >&2; exit 2; }
+    "${PY}" -m pip install -U "${DAPPS_SPEC}" "libe3py==${LIBE3_VER}" > "${WORK}/pip.log" 2>&1 \
+        || { echo "[e3-ci] pip install '${DAPPS_SPEC}' libe3py==${LIBE3_VER} failed:" >&2; tail -20 "${WORK}/pip.log" >&2; exit 2; }
 fi
 # The shipped example must import from the installed package.
 "${PY}" -c "import e3interface, spectrum.spectrum_dapp, examples.spectrum_dapp" 2>/dev/null \
