@@ -12,7 +12,7 @@ find_package(PkgConfig REQUIRED)
 # the .pc Cflags below: 0.1.3 is the first release whose Cflags are safe to
 # consume as compile definitions (earlier ones exported a quoted
 # -DLATREC_DEFAULT_DIR whose quotes pkg-config strips).
-pkg_check_modules(CLIBE3 REQUIRED libe3>=0.2.0 libe3<0.3.0)
+pkg_check_modules(CLIBE3 REQUIRED libe3>=0.3.0)
 
 if(NOT CLIBE3_FOUND)
     message(FATAL_ERROR "libe3 not found and required for E3 Agent")
@@ -142,4 +142,17 @@ if(E2_AGENT)
     target_link_libraries(e3ap PUBLIC e2_ran_func_cuup e2_ran_func_du_cucp_cuup)
     target_compile_definitions(e3ap PRIVATE E2_AGENT)
     target_include_directories(e3ap PUBLIC ${OPENAIR_DIR}/openair2/E2AP/RAN_FUNCTION/O-RAN)
+
+    # The relay that closes a deferred control acknowledge. It is kept out of
+    # e3ap deliberately: it needs flexRIC's E2SM-DAPP codec and the Spectrum
+    # encoder, and e3ap is on nr-cuup's link line, which has a use for neither.
+    #
+    # OBJECT, not a static archive. It carries the strong definition of the
+    # MAC's weak prb_block_on_air_hook(), and an archive member is only pulled
+    # in to resolve an undefined symbol -- a weak one is already "resolved", so
+    # the hook would stay a bare ret. An object library's members are always
+    # linked, which gets the same result as whole-archiving without needing
+    # CMake 3.24's $<LINK_LIBRARY:WHOLE_ARCHIVE>; this project declares 3.19.
+    add_library(e3ap_ctrl_ack OBJECT e3_ctrl_ack_relay.c)
+    target_link_libraries(e3ap_ctrl_ack PUBLIC e3ap ${SERVICE_MODELS_LIBRARY} ${CLIBE3_LIBRARIES} dapp_sm_static)
 endif()
