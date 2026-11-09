@@ -254,7 +254,9 @@ int e3_send_xapp_control(uint32_t dapp_id, uint32_t sequence_id, uint32_t ran_fu
     return -1;
   }
 
-  e3_error_t err = e3_agent_send_xapp_control(e3.agent, dapp_id, ran_function_id, data, len, sequence_id);
+  /* No message id back and no E3-ControlResponse asked for: the xApp learns the
+   * result from the deferred E2 acknowledge, not from the dApp's answer. */
+  e3_error_t err = e3_agent_send_xapp_control(e3.agent, dapp_id, ran_function_id, data, len, sequence_id, NULL, 0);
   if (err != E3_SUCCESS) {
     E3_LOG_E("Failed to send xApp control to dApp %u for RAN function %u (err=%d)\n", dapp_id, ran_function_id, err);
     return -1;
