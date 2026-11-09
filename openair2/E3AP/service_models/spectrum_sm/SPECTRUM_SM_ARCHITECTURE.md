@@ -83,8 +83,9 @@ dApp ──(E3 control, RF=1)──► E3 agent ──► spectrum_sm_process_co
 | 1 | `prbBlacklist` | `Spectrum-PRBBlacklistControl` | `spectrum_process_prb_block()` | Install/clear a PRB block |
 | 2 | `sensingPolicy` | `Spectrum-SensingPolicyControl` | `spectrum_process_sensing_policy()` | Set/clear the per-slot sensing mask |
 
-Each handler decodes the payload, drives the MAC, and replies with a positive or
-negative message ACK (a negative ACK is paired with a `LOG_W` naming the cause).
+Each handler decodes the payload, drives the MAC, and answers with a positive or
+negative E3-ControlResponse when the dApp asked for one (`requestAck`). A negative
+response carries a cause and a text, and is paired with a `LOG_W` naming the cause.
 
 ### PRB block (control_id 1)
 

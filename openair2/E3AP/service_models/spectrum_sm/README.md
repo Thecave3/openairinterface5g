@@ -208,7 +208,7 @@ The dApp sends the *complete* current PRB set on every change; the gNB mirrors i
 
 ## dApp→gNB control delivery
 
-A control is sent once. `libe3` has no retransmission, sequence-number or duplicate layer for it: the gNB answers each control with an `E3-MessageAck` (positive when it was applied, negative when it was refused), and the ack means the block is installed in the MAC, not yet on air (it takes effect from the next slot). A control lost on the way is therefore not repeated by `libe3`; a dApp that cannot afford that must watch the acks and resend, or resend its current set periodically (the set is complete and replaces the previous one, so a repeat is harmless). A dApp that sends a control only when the set changed, as the spectrum dApp does, corrects a lost control at its next change.
+A control is sent once. `libe3` has no retransmission, sequence-number or duplicate layer for it: a dApp that sets `requestAck` on a control gets an `E3-ControlResponse` (positive when it was applied, negative when it was refused, with a cause), and the response means the block is installed in the MAC, not yet on air (it takes effect from the next slot). A control the gNB refuses before the service model sees it is answered negative whether the dApp asked or not. A control lost on the way is therefore not repeated by `libe3`; a dApp that cannot afford that must watch the responses and resend, or resend its current set periodically (the set is complete and replaces the previous one, so a repeat is harmless). A dApp that sends a control only when the set changed, as the spectrum dApp does, corrects a lost control at its next change.
 
 ---
 

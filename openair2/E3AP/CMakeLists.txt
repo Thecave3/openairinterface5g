@@ -6,13 +6,16 @@
 set(E3_REQUIRED_ENCODINGS "" CACHE STRING "E3 wire encodings the linked libe3 must provide (asn1;json;protobuf); empty = no build-time requirement")
 
 find_package(PkgConfig REQUIRED)
-# libe3's C API is not stable across minor releases: 0.2.0 adds a correlation
+# libe3's C API is not stable across minor releases. 0.2.0 adds a correlation
 # id (sequence_id) to the control and report callbacks and to
-# e3_agent_send_xapp_control(), so stay inside the 0.2 series. It also covers
-# the .pc Cflags below: 0.1.3 is the first release whose Cflags are safe to
-# consume as compile definitions (earlier ones exported a quoted
-# -DLATREC_DEFAULT_DIR whose quotes pkg-config strips).
-pkg_check_modules(CLIBE3 REQUIRED libe3>=0.3.0)
+# e3_agent_send_xapp_control(); 0.5.0 answers a control with an
+# E3-ControlResponse (e3_service_model_emit_control_response() in place of
+# e3_service_model_emit_message_ack()) and adds out_message_id and request_ack
+# to e3_agent_send_xapp_control(). It also covers the .pc Cflags below: 0.1.3
+# is the first release whose Cflags are safe to consume as compile definitions
+# (earlier ones exported a quoted -DLATREC_DEFAULT_DIR whose quotes pkg-config
+# strips).
+pkg_check_modules(CLIBE3 REQUIRED libe3>=0.5.0)
 
 if(NOT CLIBE3_FOUND)
     message(FATAL_ERROR "libe3 not found and required for E3 Agent")
