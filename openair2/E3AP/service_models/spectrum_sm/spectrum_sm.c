@@ -38,9 +38,35 @@ static int spectrum_ran_function_data_ready = 0;
 #define SPECTRUM_SM_CONTROL_ID_PRB_BLOCK 1
 #define SPECTRUM_SM_CONTROL_ID_SENSING_POLICY 2
 
-/* e3_service_model_emit_message_ack response codes (libe3 convention). */
-#define SPECTRUM_SM_ACK_POSITIVE 0
-#define SPECTRUM_SM_ACK_NEGATIVE 1
+/* e3_service_model_emit_control_response response codes (libe3 convention). */
+#define SPECTRUM_SM_RESPONSE_POSITIVE 0
+#define SPECTRUM_SM_RESPONSE_NEGATIVE 1
+
+/* libe3's E3-Cause values (include/libe3/types.hpp), given with a negative response. */
+#define SPECTRUM_SM_CAUSE_UNSPECIFIED 0
+#define SPECTRUM_SM_CAUSE_UNSUPPORTED_RAN_FUNCTION 5
+#define SPECTRUM_SM_CAUSE_UNSUPPORTED_IDENTIFIER 6
+#define SPECTRUM_SM_CAUSE_INVALID_REQUEST 7
+#define SPECTRUM_SM_CAUSE_NOT_FOUND 8
+
+/* Answer a control. libe3 sends the response only if the dApp asked for one
+ * (requestAck) and returns E3_NOT_FOUND when it did not, which is not an error. */
+static void spectrum_respond(e3_service_model_handle_t *sm_handle,
+                             uint32_t dapp_id,
+                             uint32_t request_message_id,
+                             bool ok,
+                             int cause,
+                             const char *detail)
+{
+  e3_service_model_emit_control_response(sm_handle,
+                                         dapp_id,
+                                         request_message_id,
+                                         ok ? SPECTRUM_SM_RESPONSE_POSITIVE : SPECTRUM_SM_RESPONSE_NEGATIVE,
+                                         ok ? -1 : cause,
+                                         ok ? NULL : detail,
+                                         NULL,
+                                         0);
+}
 
 static uint32_t spectrum_control_ids[] = {
     SPECTRUM_SM_CONTROL_ID_PRB_BLOCK,
@@ -428,6 +454,7 @@ static void format_prb_list(char *buf, size_t sz, const uint16_t *prbs, size_t n
 }
 
 static e3_error_t spectrum_process_prb_block(e3_service_model_handle_t *sm_handle,
+                                             uint32_t dapp_id,
                                              uint32_t request_message_id,
                                              const uint8_t *data,
                                              size_t data_len,
@@ -436,14 +463,14 @@ static e3_error_t spectrum_process_prb_block(e3_service_model_handle_t *sm_handl
   struct gNB_MAC_INST_s *mac = NULL;
   struct nr_cell_sched_s *cell = NULL;
   if (!e3_spectrum_default_cell(&mac, &cell)) {
-    SPEC_LOG_W("prbBlock received before MAC init; NACK\n");
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    SPEC_LOG_W("prbBlock received before MAC init; refused\n");
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_UNSPECIFIED, "the MAC is not initialized");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
   spectrum_prb_control_t *control_payload = spectrum_decode_prb_control((uint8_t *)data, data_len);
   if (!control_payload) {
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_INVALID_REQUEST, "the PRB block does not decode");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
@@ -482,11 +509,14 @@ static e3_error_t spectrum_process_prb_block(e3_service_model_handle_t *sm_handl
   bool ok = ok_ul && ok_dl;
 
   spectrum_free_decoded_control(control_payload);
-  e3_service_model_emit_message_ack(sm_handle, request_message_id, ok ? SPECTRUM_SM_ACK_POSITIVE : SPECTRUM_SM_ACK_NEGATIVE);
+  spectrum_respond(sm_handle, dapp_id, request_message_id, ok, SPECTRUM_SM_CAUSE_INVALID_REQUEST, "the scheduler refused the PRB block");
   return ok ? E3_SUCCESS : E3_SM_ERROR_INVALID_PARAM;
 }
 
+/* Answers with an E3-ControlResponse, positive on success and negative (with a LOG_W naming
+ * the cause) on every failure path, when the dApp asked for an answer. */
 static e3_error_t spectrum_process_sensing_policy(e3_service_model_handle_t *sm_handle,
+                                                  uint32_t dapp_id,
                                                   uint32_t request_message_id,
                                                   const uint8_t *data,
                                                   size_t data_len)
@@ -494,14 +524,14 @@ static e3_error_t spectrum_process_sensing_policy(e3_service_model_handle_t *sm_
   struct gNB_MAC_INST_s *mac = NULL;
   struct nr_cell_sched_s *cell = NULL;
   if (!e3_spectrum_default_cell(&mac, &cell)) {
-    SPEC_LOG_W("sensingPolicy received before MAC init; NACK\n");
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    SPEC_LOG_W("sensingPolicy received before MAC init; refused\n");
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_UNSPECIFIED, "the MAC is not initialized");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
   spectrum_sensing_policy_t *policy = spectrum_decode_sensing_policy((uint8_t *)data, data_len);
   if (!policy) {
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_INVALID_REQUEST, "the sensing policy does not decode");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
@@ -516,7 +546,7 @@ static e3_error_t spectrum_process_sensing_policy(e3_service_model_handle_t *sm_
   }
 
   spectrum_free_sensing_policy(policy);
-  e3_service_model_emit_message_ack(sm_handle, request_message_id, ok ? SPECTRUM_SM_ACK_POSITIVE : SPECTRUM_SM_ACK_NEGATIVE);
+  spectrum_respond(sm_handle, dapp_id, request_message_id, ok, SPECTRUM_SM_CAUSE_INVALID_REQUEST, "the scheduler refused the sensing policy");
   return ok ? E3_SUCCESS : E3_SM_ERROR_INVALID_PARAM;
 }
 
@@ -530,12 +560,10 @@ static e3_error_t spectrum_sm_process_control(e3_service_model_handle_t *sm_hand
                                               size_t data_len,
                                               uint32_t sequence_id)
 {
-  (void)dapp_id;
-
   spectrum_sm_context_t *ctx = (spectrum_sm_context_t *)sm_context;
   if (!ctx || !sm_handle || ran_function_id != E3_SM_ID_SPECTRUM) {
     if (sm_handle) {
-      e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+      spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_UNSUPPORTED_RAN_FUNCTION, "not the Spectrum RAN function");
     }
     return E3_SM_ERROR_INVALID_PARAM;
   }
@@ -546,24 +574,24 @@ static e3_error_t spectrum_sm_process_control(e3_service_model_handle_t *sm_hand
 
   /* A control racing spectrum_sm_stop() must not reinstall what stop cleared. */
   if (!sm_running) {
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_NOT_FOUND, "the Spectrum service model is stopped");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
   if (!data || data_len == 0) {
-    e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+    spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_INVALID_REQUEST, "the control carries no payload");
     return E3_SM_ERROR_INVALID_PARAM;
   }
 
   switch (control_id) {
     case SPECTRUM_SM_CONTROL_ID_PRB_BLOCK:
-      return spectrum_process_prb_block(sm_handle, request_message_id, data, data_len, sequence_id);
+      return spectrum_process_prb_block(sm_handle, dapp_id, request_message_id, data, data_len, sequence_id);
     case SPECTRUM_SM_CONTROL_ID_SENSING_POLICY:
       /* No apply-outcome for the sensing policy, so sequence_id is unused. */
-      return spectrum_process_sensing_policy(sm_handle, request_message_id, data, data_len);
+      return spectrum_process_sensing_policy(sm_handle, dapp_id, request_message_id, data, data_len);
     default:
       SPEC_LOG_E("unknown control_id %u\n", control_id);
-      e3_service_model_emit_message_ack(sm_handle, request_message_id, SPECTRUM_SM_ACK_NEGATIVE);
+      spectrum_respond(sm_handle, dapp_id, request_message_id, false, SPECTRUM_SM_CAUSE_UNSUPPORTED_IDENTIFIER, "unknown control identifier");
       return E3_SM_ERROR_INVALID_PARAM;
   }
 }
