@@ -234,7 +234,7 @@ beam 0).
 
 The transport keys of the same section are `link`, `transport`, `encoding`, the
 port triplet `setup_port` / `subscriber_port` / `publisher_port` (0 = the libe3
-default), and `enabled_sms`.
+default; `posix` reads only `setup_port`), and `enabled_sms`.
 
 ---
 

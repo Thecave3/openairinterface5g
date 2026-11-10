@@ -92,9 +92,9 @@ void e3_readconfig(e3_cmdline_config_t *config)
     {"link",              "Link layer for E3 (zmq|posix)",           simOpt, .strptr  = &s_link,               .defstrval = "posix", TYPE_STRING,  0},
     {"transport",         "Transport layer for E3 (sctp|tcp|ipc)",   simOpt, .strptr  = &s_transport,          .defstrval = "ipc",   TYPE_STRING,  0},
     {"encoding",          "Encoding format for E3 (asn1|json|protobuf)", simOpt, .strptr  = &s_encoding,       .defstrval = "asn1",  TYPE_STRING,  0},
-    {"setup_port",        "E3 setup port (0=libe3 default)",         simOpt, .u16ptr  = &config->setup_port,      .defuintval = 0, TYPE_UINT16, 0},
-    {"subscriber_port",   "E3 subscriber port (0=libe3 default)",    simOpt, .u16ptr  = &config->subscriber_port, .defuintval = 0, TYPE_UINT16, 0},
-    {"publisher_port",    "E3 publisher port (0=libe3 default)",     simOpt, .u16ptr  = &config->publisher_port,  .defuintval = 0, TYPE_UINT16, 0},
+    {"setup_port",        "E3 setup port, the only port of posix (0=libe3 default)", simOpt, .u16ptr  = &config->setup_port,      .defuintval = 0, TYPE_UINT16, 0},
+    {"subscriber_port",   "E3 subscriber port, zmq only (0=libe3 default)", simOpt, .u16ptr  = &config->subscriber_port, .defuintval = 0, TYPE_UINT16, 0},
+    {"publisher_port",    "E3 publisher port, zmq only (0=libe3 default)", simOpt, .u16ptr  = &config->publisher_port,  .defuintval = 0, TYPE_UINT16, 0},
     {"enabled_sms",       "SM IDs to register (empty=all)",          simOpt, .iptr    = NULL,                  .defintarrayval = NULL, TYPE_INTARRAY, 0},
   };
 

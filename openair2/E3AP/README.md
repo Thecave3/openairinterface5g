@@ -78,6 +78,12 @@ Valid link/transport combinations:
 | posix | tcp       |
 | posix | sctp      |
 
+On `zmq` a dApp uses three endpoints: the setup, subscriber and publisher ports (9990, 9999 and 9991
+by default), or three IPC paths under `/tmp/dapps`. On `posix` it uses one, whatever the transport:
+port 9990 for `tcp` and `sctp`, the IPC path `/tmp/dapps/e3` for `ipc`. `subscriber_port` and
+`publisher_port` are not read on `posix`. libe3 0.6.0 introduced this layout and keeps nothing of the
+old one, so the gNB and the dApp library must be built on the same libe3 release.
+
 ## Service models
 
 A service model (SM) defines one topic a dApp can subscribe to. It is identified on
@@ -101,7 +107,7 @@ sensing policy, see its README). Code is split by what it depends on:
 
 The wire encoding (`asn1`, `json` or `protobuf`) is chosen per run with
 `E3Configuration.encoding` (default `asn1`) and applies to every SM. The keys
-`setup_port`, `subscriber_port` and `publisher_port` (0 = libe3 default) and
+`setup_port`, `subscriber_port` and `publisher_port` (0 = libe3 default; the last two are for `zmq`) and
 `enabled_sms` (SM ids to register, empty = all) live in the same section, as do the
 sensing keys described in the Spectrum SM README.
 [`targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.106prb.rfsim.e3.conf`](../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.106prb.rfsim.e3.conf)
@@ -139,7 +145,8 @@ sudo ./nr-softmodem \
 ```
 
 If the agent initializes correctly, the log will show `Init E3 Agent` and the setup socket
-will appear at `/tmp/dapps/setup`.
+will appear at `/tmp/dapps/setup` (with `--E3Configuration.link posix --E3Configuration.transport ipc`
+the one endpoint is `/tmp/dapps/e3`).
 
 An `E3AP` log component is available for debugging: pass `--log_config.e3ap_log_level debug`
 to increase verbosity.
