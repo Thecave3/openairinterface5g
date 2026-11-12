@@ -57,7 +57,7 @@ If the block is absent, the agent falls back to built-in defaults (`posix`/`ipc`
 
 ```
 E3Configuration : {
-    link      = "zmq";   # posix | zmq
+    link      = "zmq";   # posix | uring | zmq
     transport = "ipc";   # tcp | sctp | ipc
 };
 ```
@@ -77,12 +77,21 @@ Valid link/transport combinations:
 | posix | ipc       |
 | posix | tcp       |
 | posix | sctp      |
+| uring | ipc       |
+| uring | tcp       |
+| uring | sctp      |
 
 On `zmq` a dApp uses three endpoints: the setup, subscriber and publisher ports (9990, 9999 and 9991
 by default), or three IPC paths under `/tmp/dapps`. On `posix` it uses one, whatever the transport:
 port 9990 for `tcp` and `sctp`, the IPC path `/tmp/dapps/e3` for `ipc`. `subscriber_port` and
 `publisher_port` are not read on `posix`. libe3 0.6.0 introduced this layout and keeps nothing of the
 old one, so the gNB and the dApp library must be built on the same libe3 release.
+
+`uring` is the POSIX wire (the same single endpoint, the same framing) carried by io_uring instead of
+plain system calls, so a gNB on `uring` serves a dApp on `posix` and the other way round. It needs a
+libe3 built with liburing and a kernel that allows io_uring (Linux 5.11 or later, and not a container
+under Docker's default seccomp profile); the agent refuses to start without it, with the reason in the log.
+Ring options are libe3's `LIBE3_URING_*` environment variables (libe3's `docs/connectors/uring.md`).
 
 ## Service models
 

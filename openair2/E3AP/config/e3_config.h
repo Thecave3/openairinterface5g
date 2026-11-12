@@ -18,6 +18,7 @@
 /* link_layer values (match libe3 e3_config_t; -1 = libe3 default) */
 #define E3_LINK_ZMQ 0
 #define E3_LINK_POSIX 1
+#define E3_LINK_URING 2 /* libe3 >= the release with the io_uring link */
 
 /* transport_layer values (match libe3 e3_config_t; -1 = libe3 default) */
 #define E3_TRANSPORT_SCTP 0
@@ -30,7 +31,7 @@
 #define E3_ENCODING_PROTOBUF 2
 
 typedef struct {
-  int link_layer; /* E3_LINK_{ZMQ,POSIX}; -1 = libe3 default */
+  int link_layer; /* E3_LINK_{ZMQ,POSIX,URING}; -1 = libe3 default */
   int transport_layer; /* E3_TRANSPORT_{SCTP,TCP,IPC}; -1 = libe3 default */
   int encoding; /* E3_ENCODING_{ASN1,JSON,PROTOBUF}; -1 = libe3 default */
   uint16_t setup_port; /* dApp setup port, and the only port of posix; 0 = libe3 default (9990) */

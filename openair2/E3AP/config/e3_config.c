@@ -68,8 +68,8 @@ static bool e3_encoding_available(int encoding)
 /* String-to-integer mappings for link, transport, and encoding.
  * Values must match the libe3 e3_config_t enum ordering. */
 // clang-format off
-#define E3_LINK_OKSTRINGS      {"zmq",  "posix"}
-#define E3_LINK_VALUES         {E3_LINK_ZMQ, E3_LINK_POSIX}
+#define E3_LINK_OKSTRINGS      {"zmq",  "posix", "uring"}
+#define E3_LINK_VALUES         {E3_LINK_ZMQ, E3_LINK_POSIX, E3_LINK_URING}
 #define E3_TRANSPORT_OKSTRINGS {"sctp", "tcp", "ipc"}
 #define E3_TRANSPORT_VALUES    {E3_TRANSPORT_SCTP, E3_TRANSPORT_TCP, E3_TRANSPORT_IPC}
 #define E3_ENCODING_OKSTRINGS  {"asn1", "json", "protobuf"}
@@ -89,7 +89,7 @@ void e3_readconfig(e3_cmdline_config_t *config)
   // clang-format off
   paramdef_t e3_params[] = {
     /* optname             helpstr                                   paramflags  value                           defval      type          numelt */
-    {"link",              "Link layer for E3 (zmq|posix)",           simOpt, .strptr  = &s_link,               .defstrval = "posix", TYPE_STRING,  0},
+    {"link",              "Link layer for E3 (zmq|posix|uring)",     simOpt, .strptr  = &s_link,               .defstrval = "posix", TYPE_STRING,  0},
     {"transport",         "Transport layer for E3 (sctp|tcp|ipc)",   simOpt, .strptr  = &s_transport,          .defstrval = "ipc",   TYPE_STRING,  0},
     {"encoding",          "Encoding format for E3 (asn1|json|protobuf)", simOpt, .strptr  = &s_encoding,       .defstrval = "asn1",  TYPE_STRING,  0},
     {"setup_port",        "E3 setup port, the only port of posix (0=libe3 default)", simOpt, .u16ptr  = &config->setup_port,      .defuintval = 0, TYPE_UINT16, 0},
@@ -99,7 +99,7 @@ void e3_readconfig(e3_cmdline_config_t *config)
   };
 
   checkedparam_t e3_checks[] = {
-    {.s3a = {config_checkstr_assign_integer, E3_LINK_OKSTRINGS,      E3_LINK_VALUES,      2}},
+    {.s3a = {config_checkstr_assign_integer, E3_LINK_OKSTRINGS,      E3_LINK_VALUES,      3}},
     {.s3a = {config_checkstr_assign_integer, E3_TRANSPORT_OKSTRINGS, E3_TRANSPORT_VALUES, 3}},
     {.s3a = {config_checkstr_assign_integer, E3_ENCODING_OKSTRINGS,  E3_ENCODING_VALUES,  3}},
     {.s5 = {NULL}},
