@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
 
-# E3 agent test: a core-less RFsim gNB per wire encoding, deployed one at a
-# time (they publish the same ports). The dApp runs on the test host
+# E3 agent test: a core-less RFsim gNB per E3 link (ZeroMQ TCP with JSON and ASN.1, POSIX SCTP with ASN.1),
+# deployed one at a time (they publish the same ports). The dApp runs on the test host
 # (scripts/run-e3-dapp.sh): it reaches the gNB's E3 endpoints on the published
 # ports and reads the IQ from /dev/shm, which the container shares with the host.
 
@@ -14,9 +14,9 @@ x-gnb-e3: &gnb-e3
         - NET_RAW
     ipc: host
     ports:
-        - "9990:9990"  # E3 setup
-        - "9991:9991"  # E3 publisher
-        - "9999:9999"  # E3 subscriber
+        - "9990:9990"  # E3 setup; the only port of the posix link
+        - "9991:9991"  # E3 publisher, zmq only
+        - "9999:9999"  # E3 subscriber, zmq only
     networks:
         public_net:
     volumes:
@@ -28,23 +28,30 @@ x-gnb-e3: &gnb-e3
         retries: 5
 
 services:
-    oai-gnb-asn1:
+    # Aerial's link: ZeroMQ over TCP, JSON
+    oai-gnb-zmq-tcp-json:
         <<: *gnb-e3
-        container_name: rfsim5g-oai-gnb-e3-asn1
+        container_name: rfsim5g-oai-gnb-e3-zmq-tcp-json
         environment:
-            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.encoding asn1 --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.link zmq --E3Configuration.transport tcp --E3Configuration.encoding json --log_config.global_log_options level,nocolor,time
 
-    oai-gnb-json:
+    # OAI's link: ZeroMQ over TCP, ASN.1
+    oai-gnb-zmq-tcp-asn1:
         <<: *gnb-e3
-        container_name: rfsim5g-oai-gnb-e3-json
+        container_name: rfsim5g-oai-gnb-e3-zmq-tcp-asn1
         environment:
-            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.encoding json --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.link zmq --E3Configuration.transport tcp --E3Configuration.encoding asn1 --log_config.global_log_options level,nocolor,time
 
-    oai-gnb-protobuf:
+    # OCUDU's link: the POSIX link over SCTP, one association to port 9990, ASN.1. The host needs the sctp
+    # kernel module, and the dApp a libe3py built with SCTP (see scripts/run-e3-dapp.sh). IPC is not run here:
+    # the RAN creates its socket with its own umask and a dApp of another user cannot connect (wineslab/libe3#168).
+    oai-gnb-posix-sctp-asn1:
         <<: *gnb-e3
-        container_name: rfsim5g-oai-gnb-e3-protobuf
+        container_name: rfsim5g-oai-gnb-e3-posix-sctp-asn1
+        ports:
+            - "9990:9990/sctp"  # E3 setup; the only port of the posix link
         environment:
-            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.encoding protobuf --log_config.global_log_options level,nocolor,time
+            USE_ADDITIONAL_OPTIONS: --rfsim --rfsimulator.[0].serveraddr server --gNBs.[0].min_rxtxtime 6 --gNBs.[0].amf_ip_address.[0].ipv4 127.0.0.99 --E3Configuration.link posix --E3Configuration.transport sctp --E3Configuration.encoding asn1 --log_config.global_log_options level,nocolor,time
 
 networks:
     public_net:

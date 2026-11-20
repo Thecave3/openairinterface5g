@@ -12,7 +12,7 @@
 
 FROM ran-base:latest AS ran-build-e3
 
-ARG LIBE3_VERSION=0.5.0
+ARG LIBE3_VERSION=0.6.0
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe
 
@@ -29,7 +29,7 @@ RUN apt-get update && \
 RUN git clone --depth 1 --branch $LIBE3_VERSION https://github.com/wineslab/libe3 /opt/libe3 && \
     cd /opt/libe3 && \
     ./build_libe3 -I && \
-    ./build_libe3 --ninja --all-encodings --disable-tests --disable-examples --install
+    ./build_libe3 --ninja --all-encodings --enable-sctp --disable-tests --disable-examples --install
 
 RUN rm -Rf /oai-ran
 WORKDIR /oai-ran

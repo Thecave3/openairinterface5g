@@ -5,21 +5,24 @@
 # Runs the dApp library's spectrum example against the gNB container of
 # yaml_files/5g_rfsimulator_e3 and checks the dApp stats and the gNB log.
 #
-# Usage: run-e3-dapp.sh <encoding> <gnb-container>
+# Usage: run-e3-dapp.sh <encoding> <gnb-container> [<link> <transport>]
 #   encoding        asn1 | json | protobuf, the one the gNB was started with
 #   gnb-container   name of the running gNB container
+#   link, transport the E3 link the gNB was started with (default: zmq tcp)
 # Env:   DAPP_TIMED   dApp run seconds       (default: 20)
 #        DAPPS_SPEC   pip requirement of the dApp library (default: dapps>=0.3.2)
 #        SKIP_PIP     set to 1 to use the python3 on PATH and its dApp library as is
 #        BOOT_TIMEOUT_S  wait for the gNB to reach Frame.Slot (default: 90)
 #
 # The dApp is installed from PyPI into a throwaway venv; libe3py is built against the
-# host's libe3 (./build_libe3 --all-encodings --install) and pinned to its version.
+# host's libe3 (./build_libe3 --all-encodings --enable-sctp --install) and pinned to its version.
 
 set -u
 
 ENC="${1:?usage: run-e3-dapp.sh <encoding> <gnb-container>}"
-GNB="${2:?usage: run-e3-dapp.sh <encoding> <gnb-container>}"
+GNB="${2:?usage: run-e3-dapp.sh <encoding> <gnb-container> [<link> <transport>]}"
+LINK="${3:-zmq}"
+TRANSPORT="${4:-tcp}"
 DAPP_TIMED="${DAPP_TIMED:-20}"
 DAPPS_SPEC="${DAPPS_SPEC:-dapps>=0.3.2}"
 SKIP_PIP="${SKIP_PIP:-0}"
@@ -41,7 +44,11 @@ if [ "${SKIP_PIP}" != "1" ]; then
     PY="${WORK}/venv/bin/python"
     LIBE3_VER="$(pkg-config --modversion libe3 2>/dev/null)" \
         || { echo "[e3-ci] libe3 is not installed on this host (pkg-config libe3)" >&2; exit 2; }
-    "${PY}" -m pip install -U "${DAPPS_SPEC}" "libe3py==${LIBE3_VER}" > "${WORK}/pip.log" 2>&1 \
+    # The prebuilt libe3py wheels have no SCTP: for it, libe3py is built from its sdist against the host's libe3,
+    # which then has to be built with --enable-sctp.
+    NO_BINARY=""
+    [ "${TRANSPORT}" = "sctp" ] && NO_BINARY="--no-binary libe3py"
+    "${PY}" -m pip install -U ${NO_BINARY} "${DAPPS_SPEC}" "libe3py==${LIBE3_VER}" > "${WORK}/pip.log" 2>&1 \
         || { echo "[e3-ci] pip install '${DAPPS_SPEC}' libe3py==${LIBE3_VER} failed:" >&2; tail -20 "${WORK}/pip.log" >&2; exit 2; }
 fi
 "${PY}" -c "import e3interface, spectrum.spectrum_dapp, examples.spectrum_dapp" 2>/dev/null \
@@ -55,14 +62,14 @@ until gnb_log | grep -q "Frame.Slot"; do
     [ "${waited}" -ge "${BOOT_TIMEOUT_S}" ] \
         && { echo "[e3-ci] ${GNB} did not reach Frame.Slot in ${BOOT_TIMEOUT_S}s" >&2; exit 1; }
 done
-echo "[e3-ci] ${ENC}: gNB up after ${waited}s"
+echo "[e3-ci] ${ENC} over ${LINK} ${TRANSPORT}: gNB up after ${waited}s"
 
 # The dApp writes fixed /tmp/{e3,dapp}.log; truncate them to isolate this run.
 : > /tmp/dapp.log 2>/dev/null; : > /tmp/e3.log 2>/dev/null
 rc=0
 timeout $((DAPP_TIMED + 30)) \
     "${PY}" -m examples.spectrum_dapp \
-    --link zmq --transport tcp --encoding-method "${ENC}" --timed "${DAPP_TIMED}" --control \
+    --link "${LINK}" --transport "${TRANSPORT}" --encoding-method "${ENC}" --timed "${DAPP_TIMED}" --control \
     > "${WORK}/dapp.out" 2>&1 || rc=$?
 cp -f /tmp/dapp.log "${WORK}/dapp.stats" 2>/dev/null
 

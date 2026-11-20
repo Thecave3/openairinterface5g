@@ -25,96 +25,96 @@
 
   <testCase>
     <class>Deploy_Object</class>
-    <desc>Deploy the core-less RFsim gNB, asn1 encoding</desc>
+    <desc>Deploy the core-less RFsim gNB, ZeroMQ over tcp, json encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-asn1</services>
+    <services>oai-gnb-zmq-tcp-json</services>
   </testCase>
 
   <testCase>
     <class>Custom_Script</class>
-    <desc>Run the spectrum dApp against the gNB, asn1 encoding</desc>
+    <desc>Run the spectrum dApp against the gNB, ZeroMQ over tcp, json encoding</desc>
     <node>localhost</node>
     <script>scripts/run-e3-dapp.sh</script>
-    <options>asn1 rfsim5g-oai-gnb-e3-asn1</options>
+    <options>json rfsim5g-oai-gnb-e3-zmq-tcp-json zmq tcp</options>
     <timeout>300</timeout>
   </testCase>
 
   <testCase>
     <class>Stop_Object</class>
-    <desc>Stop the gNB, asn1 encoding</desc>
+    <desc>Stop the gNB, ZeroMQ over tcp, json encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-asn1</services>
+    <services>oai-gnb-zmq-tcp-json</services>
   </testCase>
 
   <testCase>
     <class>Custom_Command</class>
-    <desc>No E3 shared memory left behind, asn1 encoding</desc>
+    <desc>No E3 shared memory left behind, ZeroMQ over tcp, json encoding</desc>
     <node>localhost</node>
     <command>test ! -e /dev/shm/e3_ran_buffers &amp;&amp; test ! -e /dev/shm/e3_l2_sensing</command>
   </testCase>
 
   <testCase>
     <class>Deploy_Object</class>
-    <desc>Deploy the core-less RFsim gNB, json encoding</desc>
+    <desc>Deploy the core-less RFsim gNB, ZeroMQ over tcp, asn1 encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-json</services>
+    <services>oai-gnb-zmq-tcp-asn1</services>
   </testCase>
 
   <testCase>
     <class>Custom_Script</class>
-    <desc>Run the spectrum dApp against the gNB, json encoding</desc>
+    <desc>Run the spectrum dApp against the gNB, ZeroMQ over tcp, asn1 encoding</desc>
     <node>localhost</node>
     <script>scripts/run-e3-dapp.sh</script>
-    <options>json rfsim5g-oai-gnb-e3-json</options>
+    <options>asn1 rfsim5g-oai-gnb-e3-zmq-tcp-asn1 zmq tcp</options>
     <timeout>300</timeout>
   </testCase>
 
   <testCase>
     <class>Stop_Object</class>
-    <desc>Stop the gNB, json encoding</desc>
+    <desc>Stop the gNB, ZeroMQ over tcp, asn1 encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-json</services>
+    <services>oai-gnb-zmq-tcp-asn1</services>
   </testCase>
 
   <testCase>
     <class>Custom_Command</class>
-    <desc>No E3 shared memory left behind, json encoding</desc>
+    <desc>No E3 shared memory left behind, ZeroMQ over tcp, asn1 encoding</desc>
     <node>localhost</node>
     <command>test ! -e /dev/shm/e3_ran_buffers &amp;&amp; test ! -e /dev/shm/e3_l2_sensing</command>
   </testCase>
 
   <testCase>
     <class>Deploy_Object</class>
-    <desc>Deploy the core-less RFsim gNB, protobuf encoding</desc>
+    <desc>Deploy the core-less RFsim gNB, posix link over sctp, asn1 encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-protobuf</services>
+    <services>oai-gnb-posix-sctp-asn1</services>
   </testCase>
 
   <testCase>
     <class>Custom_Script</class>
-    <desc>Run the spectrum dApp against the gNB, protobuf encoding</desc>
+    <desc>Run the spectrum dApp against the gNB, posix link over sctp, asn1 encoding</desc>
     <node>localhost</node>
     <script>scripts/run-e3-dapp.sh</script>
-    <options>protobuf rfsim5g-oai-gnb-e3-protobuf</options>
+    <options>asn1 rfsim5g-oai-gnb-e3-posix-sctp-asn1 posix sctp</options>
     <timeout>300</timeout>
   </testCase>
 
   <testCase>
     <class>Stop_Object</class>
-    <desc>Stop the gNB, protobuf encoding</desc>
+    <desc>Stop the gNB, posix link over sctp, asn1 encoding</desc>
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
-    <services>oai-gnb-protobuf</services>
+    <services>oai-gnb-posix-sctp-asn1</services>
   </testCase>
 
   <testCase>
     <class>Custom_Command</class>
-    <desc>No E3 shared memory left behind, protobuf encoding</desc>
+    <desc>No E3 shared memory left behind, posix link over sctp, asn1 encoding</desc>
     <node>localhost</node>
     <command>test ! -e /dev/shm/e3_ran_buffers &amp;&amp; test ! -e /dev/shm/e3_l2_sensing</command>
   </testCase>
@@ -126,7 +126,7 @@
     <node>localhost</node>
     <yaml_path>ci-scripts/yaml_files/5g_rfsimulator_e3</yaml_path>
     <analysis>
-      <services>oai-gnb-asn1=EndsWithBye oai-gnb-json=EndsWithBye oai-gnb-protobuf=EndsWithBye</services>
+      <services>oai-gnb-zmq-tcp-json=EndsWithBye oai-gnb-zmq-tcp-asn1=EndsWithBye oai-gnb-posix-sctp-asn1=EndsWithBye</services>
     </analysis>
   </testCase>
 
