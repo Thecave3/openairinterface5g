@@ -11,12 +11,14 @@ find_package(PkgConfig REQUIRED)
 # e3_service_model_emit_message_ack()) and adds out_message_id and request_ack
 # to e3_agent_send_xapp_control(). 0.6.0 changes no C API but moves the POSIX
 # link to one endpoint per dApp, which an older libe3 does not speak, so the gNB
-# and the dApp library must be on the same release. It also covers the .pc
-# Cflags below: 0.1.3
+# and the dApp library must be on the same release. 0.6.1 keeps libe3's asn1c
+# runtime private, so the runtime this executable exports (-rdynamic) is never
+# called in place of libe3's; an older libe3 only works while both runtimes are the
+# same asn1c commit. It also covers the .pc Cflags below: 0.1.3
 # is the first release whose Cflags are safe to consume as compile definitions
 # (earlier ones exported a quoted -DLATREC_DEFAULT_DIR whose quotes pkg-config
 # strips).
-pkg_check_modules(CLIBE3 REQUIRED libe3>=0.6.0)
+pkg_check_modules(CLIBE3 REQUIRED libe3>=0.6.1)
 
 if(NOT CLIBE3_FOUND)
     message(FATAL_ERROR "libe3 not found and required for E3 Agent")

@@ -92,7 +92,8 @@ On `zmq` a dApp uses three endpoints: the setup, subscriber and publisher ports 
 by default), or three IPC paths under `/tmp/dapps`. On `posix` it uses one, whatever the transport:
 port 9990 for `tcp` and `sctp`, the IPC path `/tmp/dapps/e3` for `ipc`. `subscriber_port` and
 `publisher_port` are not read on `posix`. libe3 0.6.0 introduced this layout and keeps nothing of the
-old one, so the gNB and the dApp library must be built on the same libe3 release.
+old one, so the gNB and the dApp library must be built on the same libe3 release. libe3 0.6.1 keeps its
+asn1c runtime private, so the runtime the gNB exports (`-rdynamic`) is never called in place of libe3's.
 
 ## Service models
 
