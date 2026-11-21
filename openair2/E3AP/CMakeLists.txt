@@ -14,11 +14,13 @@ find_package(PkgConfig REQUIRED)
 # and the dApp library must be on the same release. 0.6.1 keeps libe3's asn1c
 # runtime private, so the runtime this executable exports (-rdynamic) is never
 # called in place of libe3's; an older libe3 only works while both runtimes are the
-# same asn1c commit. It also covers the .pc Cflags below: 0.1.3
+# same asn1c commit. 0.7.0 adds the io_uring link (link_layer 2, E3_LINK_URING) and
+# changes no other C API; an older libe3 refuses link layer 2 at start. It also covers
+# the .pc Cflags below: 0.1.3
 # is the first release whose Cflags are safe to consume as compile definitions
 # (earlier ones exported a quoted -DLATREC_DEFAULT_DIR whose quotes pkg-config
 # strips).
-pkg_check_modules(CLIBE3 REQUIRED libe3>=0.6.1)
+pkg_check_modules(CLIBE3 REQUIRED libe3>=0.7.0)
 
 if(NOT CLIBE3_FOUND)
     message(FATAL_ERROR "libe3 not found and required for E3 Agent")
